@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>{{ filename }}</title>
+  <style>
+    body { text-align:center; font-family:sans-serif; background:#f4f4f4; padding:50px; }
+    .box { background:white; padding:30px; border-radius:10px; display:inline-block; box-shadow:0 0 10px rgba(0,0,0,0.1); }
+    button { background:#28a745; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer; }
+    button:hover { background:#218838; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h3>📦 {{ filename }}</h3>
+    <p>Size: {{ (size / 1024) | round(2) }} KB</p>
+    <a href="/direct/{{ filename }}"><button>⬇️ Download</button></a>
+  </div>
+</body>
+</html>
