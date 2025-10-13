@@ -1,100 +1,134 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Dashboard</title>
-  <link rel="stylesheet" href="/static/style.css">
-  <style>
-    body { font-family: sans-serif; }
-    .container { width: 80%; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-    h2, h3 { text-align: center; }
-    ul { list-style: none; padding: 0; }
-    li { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee; }
-    li:last-child { border-bottom: none; }
-    .file-actions form { display: inline; }
-    .file-actions a, .file-actions button { text-decoration: none; padding: 5px 10px; border-radius: 5px; color: white; margin-left: 5px; }
-    .view-btn { background: #007bff; }
-    .direct-btn { background: #28a745; }
-    .delete-btn { background: #dc3545; border: none; cursor: pointer; font-size: 14px; }
-    .progress-container { width: 100%; background-color: #f3f3f3; border-radius: 5px; margin-top: 10px; display: none; }
-    .progress-bar { width: 0%; height: 20px; background-color: #4caf50; border-radius: 5px; text-align: center; line-height: 20px; color: white; }
-  </style>
+    <meta charset="UTF-8">
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background-color: #f8f9fa; }
+        .container { max-width: 900px; margin: 40px auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h2, h3 { text-align: center; color: #343a40; }
+        #uploadForm { display: flex; gap: 10px; margin-bottom: 20px; }
+        #fileInput { flex-grow: 1; }
+        ul { list-style: none; padding: 0; }
+        li { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #dee2e6; }
+        li:last-child { border-bottom: none; }
+        .file-info { color: #495057; }
+        .file-actions form { display: inline; margin-left: 5px; }
+        .file-actions a, .file-actions button { text-decoration: none; padding: 6px 12px; border-radius: 5px; color: white; border: none; cursor: pointer; font-size: 14px; }
+        .view-btn { background-color: #007bff; } .view-btn:hover { background-color: #0069d9; }
+        .direct-btn { background-color: #28a745; } .direct-btn:hover { background-color: #218838; }
+        .delete-btn { background-color: #dc3545; } .delete-btn:hover { background-color: #c82333; }
+        .progress-container { width: 100%; background-color: #e9ecef; border-radius: 5px; margin-top: 15px; display: none; }
+        .progress-bar { width: 0%; height: 24px; background-color: #007bff; border-radius: 5px; text-align: center; line-height: 24px; color: white; transition: width 0.3s ease; }
+        #uploadStatus { text-align: center; margin-top: 10px; font-weight: bold; }
+    </style>
 </head>
 <body>
-  <div class="container">
-    <h2>📁 File Dashboard</h2>
-    <form id="uploadForm" enctype="multipart/form-data">
-      <input type="file" name="file" id="fileInput" required>
-      <button type="submit">Upload</button>
-    </form>
+    <div class="container">
+        <h2>📁 File Dashboard</h2>
+        <form id="uploadForm" enctype="multipart/form-data">
+            <input type="file" name="file" id="fileInput" required>
+            <button type="submit">Upload</button>
+        </form>
 
-    <div class="progress-container" id="progressContainer">
-      <div class="progress-bar" id="progressBar">0%</div>
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-bar" id="progressBar">0%</div>
+        </div>
+        <p id="uploadStatus"></p>
+
+        <h3>🗂 Uploaded Files</h3>
+        <ul id="fileList">
+            {% for f in files %}
+            <li id="file-{{ f._id }}">
+                <span class="file-info">{{ f.filename }} - <strong>{{ format_size(f.size) }}</strong></span>
+                <div class="file-actions">
+                    <a href="/download/{{ f._id }}" class="view-btn">View</a>
+                    <a href="/direct/{{ f._id }}" class="direct-btn">Direct</a>
+                    <form action="/delete/{{ f._id }}" method="POST" onsubmit="return confirm('Are you sure you want to delete this file?');">
+                        <button type="submit" class="delete-btn">Delete</button>
+                    </form>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        <a href="/logout" style="float: right; margin-top: 20px;"><button>Logout</button></a>
     </div>
-    <p id="uploadStatus"></p>
 
-    <h3>🗂 Uploaded Files</h3>
-    <ul>
-      {% for f in files %}
-        <li>
-          <span>{{ f.filename }} - {{ "%.2f"|format(f.size / 1024) }} KB</span>
-          <div class="file-actions">
-            <a href="/download/{{ f._id }}" class="view-btn">View</a>
-            <a href="/direct/{{ f._id }}" class="direct-btn">Direct</a>
-            <form action="/delete/{{ f._id }}" method="POST" onsubmit="return confirm('Are you sure you want to delete this file?');">
-              <button type="submit" class="delete-btn">Delete</button>
-            </form>
-          </div>
-        </li>
-      {% endfor %}
-    </ul>
+    <script>
+        const uploadForm = document.getElementById('uploadForm');
+        const fileInput = document.getElementById('fileInput');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+        const uploadStatus = document.getElementById('uploadStatus');
+        const fileList = document.getElementById('fileList');
 
-    <a href="/logout" style="float: right; margin-top: 20px;"><button>Logout</button></a>
-  </div>
+        uploadForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const file = fileInput.files[0];
+            if (!file) return;
 
-  <script>
-    const uploadForm = document.getElementById('uploadForm');
-    const fileInput = document.getElementById('fileInput');
-    const progressContainer = document.getElementById('progressContainer');
-    const progressBar = document.getElementById('progressBar');
-    const uploadStatus = document.getElementById('uploadStatus');
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            progressContainer.style.display = 'block';
+            progressBar.style.width = '0%';
+            progressBar.textContent = '0%';
+            uploadStatus.textContent = 'Uploading...';
+            
+            const xhr = new XMLHttpRequest();
 
-    uploadForm.addEventListener('submit', function(e) {
-      e.preventDefault();
+            xhr.upload.addEventListener('progress', (event) => {
+                if (event.lengthComputable) {
+                    const percentComplete = Math.round((event.loaded / event.total) * 100);
+                    progressBar.style.width = percentComplete + '%';
+                    progressBar.textContent = percentComplete + '%';
+                }
+            });
 
-      const file = fileInput.files[0];
-      if (!file) return;
+            xhr.addEventListener('load', () => {
+                if (xhr.status === 200) {
+                    const response = JSON.parse(xhr.responseText);
+                    uploadStatus.innerHTML = `✅ <strong>${response.file.filename}</strong> uploaded successfully!`;
+                    
+                    // --- নতুন: ডাইনামিকভাবে লিস্টে ফাইল যোগ করা ---
+                    const newFile = response.file;
+                    const newListItem = document.createElement('li');
+                    newListItem.id = `file-${newFile._id}`;
+                    newListItem.innerHTML = `
+                        <span class="file-info">${newFile.filename} - <strong>${newFile.size_formatted}</strong></span>
+                        <div class="file-actions">
+                            <a href="/download/${newFile._id}" class="view-btn">View</a>
+                            <a href="/direct/${newFile._id}" class="direct-btn">Direct</a>
+                            <form action="/delete/${newFile._id}" method="POST" onsubmit="return confirm('Are you sure you want to delete this file?');">
+                                <button type="submit" class="delete-btn">Delete</button>
+                            </form>
+                        </div>
+                    `;
+                    fileList.prepend(newListItem); // নতুন ফাইলটি লিস্টের শুরুতে যোগ হবে
 
-      const formData = new FormData();
-      formData.append('file', file);
+                    // আপলোড ফর্ম রিসেট করা
+                    uploadForm.reset(); 
 
-      const xhr = new XMLHttpRequest();
+                } else {
+                    const error = JSON.parse(xhr.responseText);
+                    uploadStatus.textContent = `❌ Upload failed: ${error.message}`;
+                }
+                
+                // ১.৫ সেকেন্ড পর প্রোগ্রেস বার লুকিয়ে ফেলা
+                setTimeout(() => {
+                    progressContainer.style.display = 'none';
+                }, 1500);
+            });
 
-      xhr.upload.addEventListener('progress', function(e) {
-        if (e.lengthComputable) {
-          const percentComplete = Math.round((e.loaded / e.total) * 100);
-          progressContainer.style.display = 'block';
-          progressBar.style.width = percentComplete + '%';
-          progressBar.textContent = percentComplete + '%';
-        }
-      });
+            xhr.addEventListener('error', () => {
+                uploadStatus.textContent = '❌ An error occurred during the upload.';
+                progressContainer.style.display = 'none';
+            });
 
-      xhr.addEventListener('load', function() {
-        if (xhr.status === 200) {
-          uploadStatus.textContent = '✅ Upload complete! Refreshing page...';
-          setTimeout(() => window.location.reload(), 1500);
-        } else {
-          uploadStatus.textContent = '❌ Upload failed. Please try again.';
-        }
-      });
-
-      xhr.addEventListener('error', function() {
-        uploadStatus.textContent = '❌ An error occurred during the upload.';
-      });
-
-      xhr.open('POST', '/api/upload', true);
-      xhr.send(formData);
-    });
-  </script>
+            xhr.open('POST', '/api/upload', true);
+            xhr.send(formData);
+        });
+    </script>
 </body>
-              </html>
-              
+</html>
