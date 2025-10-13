@@ -5,9 +5,7 @@ from pymongo import MongoClient
 from werkzeug.utils import secure_filename
 from functools import wraps
 from dotenv import load_dotenv
-import os, datetime
-
-# GridFS এবং ObjectId ব্যবহারের জন্য নতুন ইম্পোর্ট
+import os, datetime, math
 from gridfs import GridFSBucket
 from bson.objectid import ObjectId
 
@@ -18,15 +16,24 @@ app.secret_key = os.getenv("SECRET_KEY", "super_secret_key")
 client = MongoClient(os.getenv("MONGO_URI"))
 db = client["r2s_bot"]
 
-# GridFS bucket তৈরি করা হলো
 fs = GridFSBucket(db)
 files_collection = db["files"]
 
-# UPLOAD_FOLDER আর প্রয়োজন নেই, কারণ ফাইল এখন ডাটাবেসে সেভ হবে
-# UPLOAD_FOLDER = "uploads"
-# os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+# --- নতুন: ফাইল সাইজ ফরম্যাট করার জন্য হেল্পার ফাংশন ---
+def format_size(size_bytes):
+    if size_bytes == 0:
+        return "0B"
+    size_name = ("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
+    i = int(math.floor(math.log(size_bytes, 1024)))
+    p = math.pow(1024, i)
+    s = round(size_bytes / p, 2)
+    return f"{s} {size_name[i]}"
 
-# --- Auth decorator ---
+# --- নতুন: টেমপ্লেটে এই ফাংশনটি ব্যবহার করার জন্য ---
+@app.context_processor
+def utility_processor():
+    return dict(format_size=format_size)
+
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -35,19 +42,16 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated
 
-# --- Login route ---
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
         username = request.form.get("username")
         password = request.form.get("password")
-
         if username == os.getenv("USERNAME") and password == os.getenv("PASSWORD"):
             session["logged_in"] = True
             return redirect(url_for("dashboard"))
         else:
             return render_template("login.html", error="Invalid credentials")
-
     return render_template("login.html")
 
 @app.route("/logout")
@@ -55,81 +59,91 @@ def logout():
     session.pop("logged_in", None)
     return redirect(url_for("login"))
 
-# --- Dashboard ---
 @app.route("/dashboard")
 @login_required
 def dashboard():
     all_files = list(files_collection.find().sort("uploaded_at", -1))
     return render_template("dashboard.html", files=all_files)
 
-# --- API Upload (GridFS দিয়ে আপডেট করা) ---
 @app.route("/api/upload", methods=["POST"])
 def api_upload():
     try:
         if "file" not in request.files:
-            return jsonify({"status": "error", "message": "No file found in request."})
-
+            return jsonify({"status": "error", "message": "No file found"}), 400
+        
         f = request.files["file"]
         filename = secure_filename(f.filename)
-
-        # ফাইলটি সরাসরি GridFS-এ আপলোড করা হচ্ছে
-        # f.stream ব্যবহার করে ফাইল কন্টেন্ট পড়া হচ্ছে
-        gridfs_id = fs.upload_from_stream(filename, f.stream, metadata={"contentType": f.mimetype})
         
-        # ডাটাবেসে ফাইলের তথ্য সেভ করা হচ্ছে
+        # content_length দিয়ে ফাইলের আসল সাইজ পাওয়া যায়
+        file_size = request.content_length
+
+        gridfs_id = fs.upload_from_stream(
+            filename, f.stream, metadata={"contentType": f.mimetype}
+        )
+        
         file_doc = {
             "filename": filename,
             "uploaded_at": datetime.datetime.utcnow(),
-            "size": f.content_length, # ফাইলের সাইজ রিকোয়েস্ট থেকে নেওয়া হচ্ছে
-            "gridfs_id": gridfs_id  # GridFS থেকে পাওয়া ID সেভ করা হচ্ছে
+            "size": file_size,
+            "gridfs_id": gridfs_id
         }
         result = files_collection.insert_one(file_doc)
 
-        # ডাউনলোড URL-এ ফাইলের নামের পরিবর্তে ডাটাবেসের ইউনিক ID ব্যবহার করা হচ্ছে
+        # --- নতুন: সফলভাবে আপলোডের পর ফাইলের তথ্যগুলো JSON হিসেবে পাঠানো হচ্ছে ---
         return jsonify({
             "status": "success",
-            "download_url": f"{os.getenv('BASE_URL')}/download/{str(result.inserted_id)}"
+            "file": {
+                "_id": str(result.inserted_id),
+                "filename": filename,
+                "size_formatted": format_size(file_size)
+            }
         })
-
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return jsonify({"status": "error", "message": str(e)}), 500
 
-# --- Download page (ID দিয়ে আপডেট করা) ---
 @app.route("/download/<file_id>")
 def download(file_id):
     try:
-        # স্ট্রিং ID-কে ObjectId-তে কনভার্ট করে ফাইল খোঁজা হচ্ছে
         file_info = files_collection.find_one({"_id": ObjectId(file_id)})
         if file_info:
-            return render_template("file.html", filename=file_info.get("filename"), size=file_info.get("size"), file_id=file_id)
+            return render_template("file.html", file_info=file_info, file_id=file_id)
         else:
             return "❌ File not found", 404
     except:
         return "❌ Invalid file ID", 404
 
-
-# --- Direct Download (GridFS দিয়ে আপডেট করা) ---
 @app.route("/direct/<file_id>")
 def direct_download(file_id):
     try:
-        # file_id দিয়ে ডাটাবেস থেকে ফাইলের তথ্য আনা হচ্ছে
         file_info = files_collection.find_one({"_id": ObjectId(file_id)})
         if not file_info:
             return "❌ File not found in database", 404
         
-        # GridFS ID দিয়ে GridFS থেকে ফাইলটি স্ট্রীম হিসেবে খোলা হচ্ছে
         grid_out = fs.open_download_stream(file_info['gridfs_id'])
-
-        # ফাইলটি send_file ব্যবহার করে ইউজারকে পাঠানো হচ্ছে
+        
         return send_file(
             grid_out,
-            mimetype=grid_out.metadata['contentType'],
+            mimetype=grid_out.metadata.get('contentType', 'application/octet-stream'),
             as_attachment=True,
             download_name=file_info['filename']
         )
     except Exception as e:
         return "❌ File not found or error occurred", 404
 
+# --- সংশোধিত: ডিলিট ফাংশন ---
+@app.route("/delete/<file_id>", methods=["POST"])
+@login_required
+def delete_file(file_id):
+    try:
+        file_info = files_collection.find_one({"_id": ObjectId(file_id)})
+        if file_info:
+            fs.delete(file_info['gridfs_id'])
+            files_collection.delete_one({"_id": ObjectId(file_id)})
+            return redirect(url_for("dashboard"))
+        else:
+            return "File not found", 404
+    except Exception as e:
+        return f"An error occurred: {str(e)}", 500
 
 @app.route("/")
 def home():
@@ -137,4 +151,3 @@ def home():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
-    
