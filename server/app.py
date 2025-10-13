@@ -1,5 +1,3 @@
-# server/app.py
-
 from flask import Flask, request, render_template, redirect, url_for, session, jsonify, send_file
 from pymongo import MongoClient
 from werkzeug.utils import secure_filename
@@ -19,7 +17,6 @@ db = client["r2s_bot"]
 fs = GridFSBucket(db)
 files_collection = db["files"]
 
-# --- নতুন: ফাইল সাইজ ফরম্যাট করার জন্য হেল্পার ফাংশন ---
 def format_size(size_bytes):
     if size_bytes == 0:
         return "0B"
@@ -29,7 +26,6 @@ def format_size(size_bytes):
     s = round(size_bytes / p, 2)
     return f"{s} {size_name[i]}"
 
-# --- নতুন: টেমপ্লেটে এই ফাংশনটি ব্যবহার করার জন্য ---
 @app.context_processor
 def utility_processor():
     return dict(format_size=format_size)
@@ -73,8 +69,6 @@ def api_upload():
         
         f = request.files["file"]
         filename = secure_filename(f.filename)
-        
-        # content_length দিয়ে ফাইলের আসল সাইজ পাওয়া যায়
         file_size = request.content_length
 
         gridfs_id = fs.upload_from_stream(
@@ -89,7 +83,6 @@ def api_upload():
         }
         result = files_collection.insert_one(file_doc)
 
-        # --- নতুন: সফলভাবে আপলোডের পর ফাইলের তথ্যগুলো JSON হিসেবে পাঠানো হচ্ছে ---
         return jsonify({
             "status": "success",
             "file": {
@@ -130,7 +123,6 @@ def direct_download(file_id):
     except Exception as e:
         return "❌ File not found or error occurred", 404
 
-# --- সংশোধিত: ডিলিট ফাংশন ---
 @app.route("/delete/<file_id>", methods=["POST"])
 @login_required
 def delete_file(file_id):
@@ -151,4 +143,3 @@ def home():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
-    
