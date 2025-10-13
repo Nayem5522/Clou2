@@ -13,7 +13,9 @@
   <div class="box">
     <h3>📦 {{ filename }}</h3>
     <p>Size: {{ (size / 1024) | round(2) }} KB</p>
-    <a href="/direct/{{ filename }}"><button>⬇️ Download</button></a>
+    <!-- ... -->
+    <a href="/direct/{{ file_id }}"><button>⬇️ Download</button></a>
+<!-- ... -->
   </div>
 </body>
 </html>
