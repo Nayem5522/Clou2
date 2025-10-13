@@ -91,7 +91,6 @@
                     const response = JSON.parse(xhr.responseText);
                     uploadStatus.innerHTML = `✅ <strong>${response.file.filename}</strong> uploaded successfully!`;
                     
-                    // --- নতুন: ডাইনামিকভাবে লিস্টে ফাইল যোগ করা ---
                     const newFile = response.file;
                     const newListItem = document.createElement('li');
                     newListItem.id = `file-${newFile._id}`;
@@ -105,17 +104,12 @@
                             </form>
                         </div>
                     `;
-                    fileList.prepend(newListItem); // নতুন ফাইলটি লিস্টের শুরুতে যোগ হবে
-
-                    // আপলোড ফর্ম রিসেট করা
+                    fileList.prepend(newListItem);
                     uploadForm.reset(); 
-
                 } else {
                     const error = JSON.parse(xhr.responseText);
                     uploadStatus.textContent = `❌ Upload failed: ${error.message}`;
                 }
-                
-                // ১.৫ সেকেন্ড পর প্রোগ্রেস বার লুকিয়ে ফেলা
                 setTimeout(() => {
                     progressContainer.style.display = 'none';
                 }, 1500);
@@ -131,4 +125,4 @@
         });
     </script>
 </body>
-</html>
+                        </html>
