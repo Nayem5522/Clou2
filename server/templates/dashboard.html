@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <h2>📁 File Dashboard</h2>
+  <form action="/api/upload" method="POST" enctype="multipart/form-data">
+    <input type="file" name="file" required>
+    <button type="submit">Upload</button>
+  </form>
+
+  <h3>🗂 Uploaded Files</h3>
+  <ul>
+    {% for f in files %}
+      <li>
+        {{ f.filename }} - {{ (f.size / 1024) | round(2) }} KB
+        [<a href="/download/{{ f.filename }}">View</a>]
+        [<a href="/direct/{{ f.filename }}">Direct</a>]
+      </li>
+    {% endfor %}
+  </ul>
+
+  <a href="/logout"><button>Logout</button></a>
+</body>
+</html>
