@@ -1,61 +1,51 @@
-# bot/bot.py
-
-import asyncio, os, datetime
-from pymongo import MongoClient
 from pyrogram import Client, filters
 from pyrogram.types import Message
-from bot.config import BOT_TOKEN, API_ID, API_HASH, BASE_URL, MONGO_URI, STORAGE_CHANNEL_ID
+from bot.config import BOT_TOKEN, API_ID, API_HASH, BASE_URL
 from bot.utils import progress_callback
+import aiohttp, os, asyncio, traceback
 
-# Pyrogram ক্লায়েন্ট
 app = Client("r2s-bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-# MongoDB ক্লায়েন্ট
-mongo_client = MongoClient(MONGO_URI)
-db = mongo_client["r2s_bot"]
-files_collection = db["files"]
-
-# /start মেসেজ
+# /start message
 @app.on_message(filters.command("start"))
 async def start_handler(client, message: Message):
     await message.reply_text(
-        "👋 **Welcome!**\n\nI will upload your files to a secure channel and give you a permanent shareable link."
+        "👋 **Welcome to R2S File Uploader Bot**\n\n"
+        "📤 Send me any file or video, and I’ll upload it to the server.\n"
+        "🔗 Then I’ll give you a direct download link.\n\n"
+        "⚙️ **Powered by Render + MongoDB**"
     )
 
-# ফাইল হ্যান্ডলার
+# File handler
 @app.on_message(filters.document | filters.video | filters.audio)
 async def handle_file(client, message: Message):
-    user_message = await message.reply_text("📥 Processing your file...", quote=True)
-    
-    try:
-        # ফাইলটি স্টোরেজ চ্যানেলে ফরোয়ার্ড করা হচ্ছে
-        sent_message = await message.forward(STORAGE_CHANNEL_ID)
-        
-        # ফাইল সংক্রান্ত তথ্য সংগ্রহ করা হচ্ছে
-        media = sent_message.document or sent_message.video or sent_message.audio
-        file_name = media.file_name
-        file_size = media.file_size
-        
-        # ডাটাবেসে ফাইলের তথ্য সংরক্ষণ করা হচ্ছে
-        file_doc = {
-            "filename": file_name,
-            "size": file_size,
-            "message_id": sent_message.id, # চ্যানেলের মেসেজ আইডি
-            "uploaded_at": datetime.datetime.utcnow(),
-        }
-        result = files_collection.insert_one(file_doc)
+    sent = await message.reply_text("📥 Downloading your file from Telegram...")
 
-        # ডাউনলোড লিঙ্ক তৈরি করা হচ্ছে
-        download_id = str(result.inserted_id)
-        download_url = f"{BASE_URL}/download/{download_id}"
-        
-        await user_message.edit_text(
-            f"✅ **Upload Complete!**\n\n**File:** `{file_name}`\n\n🔗 [Get Download Link]({download_url})",
-            disable_web_page_preview=True,
-        )
+    try:
+        file_path = await message.download(progress=progress_callback, progress_args=(sent, "📥 Downloading"))
+
+        await sent.edit_text("☁️ Uploading to Render server...")
+
+        async with aiohttp.ClientSession() as session:
+            with open(file_path, "rb") as f:
+                form = aiohttp.FormData()
+                form.add_field("file", f, filename=os.path.basename(file_path))
+                async with session.post(f"{BASE_URL}/api/upload", data=form) as resp:
+                    data = await resp.json()
+
+        os.remove(file_path)
+
+        if data.get("status") == "success":
+            link = data.get("download_url")
+            await sent.edit_text(
+                f"✅ **Upload Complete!**\n\n🔗 [Download File Here]({link})",
+                disable_web_page_preview=True,
+            )
+        else:
+            await sent.edit_text(f"❌ Upload failed: {data.get('message')}")
 
     except Exception as e:
-        await user_message.edit_text(f"⚠️ An error occurred:\n`{str(e)}`")
+        await sent.edit_text(f"⚠️ Error occurred:\n`{traceback.format_exc()}`")
 
 print("✅ Bot is running successfully...")
 app.run()
