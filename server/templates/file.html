@@ -1,21 +1,22 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>{{ filename }}</title>
-  <style>
-    body { text-align:center; font-family:sans-serif; background:#f4f4f4; padding:50px; }
-    .box { background:white; padding:30px; border-radius:10px; display:inline-block; box-shadow:0 0 10px rgba(0,0,0,0.1); }
-    button { background:#28a745; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer; }
-    button:hover { background:#218838; }
-  </style>
+    <!-- format_size ফাংশনটি এখানেও ব্যবহার করার জন্য app.py-তে পরিবর্তন করা হয়েছে -->
+    <title>{{ file_info.filename }}</title>
+    <style>
+        body { text-align:center; font-family:sans-serif; background:#f4f4f4; padding:50px; }
+        .box { background:white; padding:30px; border-radius:10px; display:inline-block; box-shadow:0 0 10px rgba(0,0,0,0.1); }
+        button { background:#28a745; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer; font-size: 16px; }
+        button:hover { background:#218838; }
+        h3 { word-break: break-all; }
+    </style>
 </head>
 <body>
-  <div class="box">
-    <h3>📦 {{ filename }}</h3>
-    <p>Size: {{ (size / 1024) | round(2) }} KB</p>
-    <!-- ... -->
-    <a href="/direct/{{ file_id }}"><button>⬇️ Download</button></a>
-<!-- ... -->
-  </div>
+    <div class="box">
+        <h3>📦 {{ file_info.filename }}</h3>
+        <!-- এখন এখানেও সাইজ সুন্দরভাবে ফরম্যাট হয়ে দেখাবে (KB, MB, GB) -->
+        <p>Size: {{ format_size(file_info.size) }}</p>
+        <a href="/direct/{{ file_id }}"><button>⬇️ Download</button></a>
+    </div>
 </body>
 </html>
