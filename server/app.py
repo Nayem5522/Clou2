@@ -1,12 +1,15 @@
 # server/app.py
 
-# এই লাইনে send_from_directory যোগ করুন
-from flask import Flask, request, render_template, redirect, url_for, session, jsonify, send_file, send_from_directory
+from flask import Flask, request, render_template, redirect, url_for, session, jsonify, send_file
 from pymongo import MongoClient
 from werkzeug.utils import secure_filename
 from functools import wraps
 from dotenv import load_dotenv
 import os, datetime
+
+# GridFS এবং ObjectId ব্যবহারের জন্য নতুন ইম্পোর্ট
+from gridfs import GridFSBucket
+from bson.objectid import ObjectId
 
 load_dotenv()
 app = Flask(__name__)
@@ -14,10 +17,14 @@ app.secret_key = os.getenv("SECRET_KEY", "super_secret_key")
 
 client = MongoClient(os.getenv("MONGO_URI"))
 db = client["r2s_bot"]
+
+# GridFS bucket তৈরি করা হলো
+fs = GridFSBucket(db)
 files_collection = db["files"]
 
-UPLOAD_FOLDER = "uploads"
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+# UPLOAD_FOLDER আর প্রয়োজন নেই, কারণ ফাইল এখন ডাটাবেসে সেভ হবে
+# UPLOAD_FOLDER = "uploads"
+# os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # --- Auth decorator ---
 def login_required(f):
@@ -55,7 +62,7 @@ def dashboard():
     all_files = list(files_collection.find().sort("uploaded_at", -1))
     return render_template("dashboard.html", files=all_files)
 
-# --- API Upload ---
+# --- API Upload (GridFS দিয়ে আপডেট করা) ---
 @app.route("/api/upload", methods=["POST"])
 def api_upload():
     try:
@@ -64,40 +71,65 @@ def api_upload():
 
         f = request.files["file"]
         filename = secure_filename(f.filename)
-        path = os.path.join(UPLOAD_FOLDER, filename)
-        f.save(path)
 
+        # ফাইলটি সরাসরি GridFS-এ আপলোড করা হচ্ছে
+        # f.stream ব্যবহার করে ফাইল কন্টেন্ট পড়া হচ্ছে
+        gridfs_id = fs.upload_from_stream(filename, f.stream, metadata={"contentType": f.mimetype})
+        
+        # ডাটাবেসে ফাইলের তথ্য সেভ করা হচ্ছে
         file_doc = {
             "filename": filename,
             "uploaded_at": datetime.datetime.utcnow(),
-            "size": os.path.getsize(path),
+            "size": f.content_length, # ফাইলের সাইজ রিকোয়েস্ট থেকে নেওয়া হচ্ছে
+            "gridfs_id": gridfs_id  # GridFS থেকে পাওয়া ID সেভ করা হচ্ছে
         }
-        files_collection.insert_one(file_doc)
+        result = files_collection.insert_one(file_doc)
 
+        # ডাউনলোড URL-এ ফাইলের নামের পরিবর্তে ডাটাবেসের ইউনিক ID ব্যবহার করা হচ্ছে
         return jsonify({
             "status": "success",
-            "download_url": f"{os.getenv('BASE_URL')}/download/{filename}"
+            "download_url": f"{os.getenv('BASE_URL')}/download/{str(result.inserted_id)}"
         })
 
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-# --- Download page ---
-@app.route("/download/<filename>")
-def download(filename):
-    file_path = os.path.join(UPLOAD_FOLDER, filename)
-    if not os.path.exists(file_path):
-        return "❌ File not found", 404
-    file_info = files_collection.find_one({"filename": filename})
-    return render_template("file.html", filename=filename, size=file_info.get("size"))
-
-# --- পরিবর্তিত ডিরেক্ট ডাউনলোড রুট ---
-@app.route("/direct/<filename>")
-def direct_download(filename):
+# --- Download page (ID দিয়ে আপডেট করা) ---
+@app.route("/download/<file_id>")
+def download(file_id):
     try:
-        return send_from_directory(UPLOAD_FOLDER, filename, as_attachment=True)
-    except FileNotFoundError:
-        return "❌ File not found", 404
+        # স্ট্রিং ID-কে ObjectId-তে কনভার্ট করে ফাইল খোঁজা হচ্ছে
+        file_info = files_collection.find_one({"_id": ObjectId(file_id)})
+        if file_info:
+            return render_template("file.html", filename=file_info.get("filename"), size=file_info.get("size"), file_id=file_id)
+        else:
+            return "❌ File not found", 404
+    except:
+        return "❌ Invalid file ID", 404
+
+
+# --- Direct Download (GridFS দিয়ে আপডেট করা) ---
+@app.route("/direct/<file_id>")
+def direct_download(file_id):
+    try:
+        # file_id দিয়ে ডাটাবেস থেকে ফাইলের তথ্য আনা হচ্ছে
+        file_info = files_collection.find_one({"_id": ObjectId(file_id)})
+        if not file_info:
+            return "❌ File not found in database", 404
+        
+        # GridFS ID দিয়ে GridFS থেকে ফাইলটি স্ট্রীম হিসেবে খোলা হচ্ছে
+        grid_out = fs.open_download_stream(file_info['gridfs_id'])
+
+        # ফাইলটি send_file ব্যবহার করে ইউজারকে পাঠানো হচ্ছে
+        return send_file(
+            grid_out,
+            mimetype=grid_out.metadata['contentType'],
+            as_attachment=True,
+            download_name=file_info['filename']
+        )
+    except Exception as e:
+        return "❌ File not found or error occurred", 404
+
 
 @app.route("/")
 def home():
