@@ -1,4 +1,7 @@
-from flask import Flask, request, render_template, redirect, url_for, session, jsonify, send_file
+# server/app.py
+
+# এই লাইনে send_from_directory যোগ করুন
+from flask import Flask, request, render_template, redirect, url_for, session, jsonify, send_file, send_from_directory
 from pymongo import MongoClient
 from werkzeug.utils import secure_filename
 from functools import wraps
@@ -88,12 +91,13 @@ def download(filename):
     file_info = files_collection.find_one({"filename": filename})
     return render_template("file.html", filename=filename, size=file_info.get("size"))
 
+# --- পরিবর্তিত ডিরেক্ট ডাউনলোড রুট ---
 @app.route("/direct/<filename>")
 def direct_download(filename):
-    file_path = os.path.join(UPLOAD_FOLDER, filename)
-    if os.path.exists(file_path):
-        return send_file(file_path, as_attachment=True)
-    return "❌ File not found", 404
+    try:
+        return send_from_directory(UPLOAD_FOLDER, filename, as_attachment=True)
+    except FileNotFoundError:
+        return "❌ File not found", 404
 
 @app.route("/")
 def home():
@@ -101,4 +105,4 @@ def home():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
-  
+    
