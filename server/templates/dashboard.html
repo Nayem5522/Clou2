@@ -13,13 +13,15 @@
 
   <h3>🗂 Uploaded Files</h3>
   <ul>
+    <!-- ... -->
     {% for f in files %}
       <li>
         {{ f.filename }} - {{ (f.size / 1024) | round(2) }} KB
-        [<a href="/download/{{ f.filename }}">View</a>]
-        [<a href="/direct/{{ f.filename }}">Direct</a>]
+        [<a href="/download/{{ f._id }}">View</a>]
+        [<a href="/direct/{{ f._id }}">Direct</a>]
       </li>
     {% endfor %}
+<!-- ... -->
   </ul>
 
   <a href="/logout"><button>Logout</button></a>
