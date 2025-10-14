@@ -1,20 +1,25 @@
+<!-- START OF FILE server/templates/file.html -->
+
 <!DOCTYPE html>
 <html>
 <head>
-    <title>{{ file_info.filename }}</title>
+    <title>{{ link_info.filename }}</title>
     <style>
         body { text-align:center; font-family:sans-serif; background:#f4f4f4; padding:50px; }
         .box { background:white; padding:30px; border-radius:10px; display:inline-block; box-shadow:0 0 10px rgba(0,0,0,0.1); }
-        button { background:#28a745; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer; font-size: 16px; }
+        button { background:#28a745; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer; font-size: 16px; text-decoration: none; display: inline-block; }
         button:hover { background:#218838; }
         h3 { word-break: break-all; }
+        .download-link { text-decoration: none; }
     </style>
 </head>
 <body>
     <div class="box">
-        <h3>📦 {{ file_info.filename }}</h3>
-        <p>Size: {{ format_size(file_info.size) }}</p>
-        <a href="/direct/{{ file_id }}"><button>⬇️ Download</button></a>
+        <h3>📦 {{ link_info.filename }}</h3>
+        <p>Size: {{ format_size(link_info.size) }}</p>
+        <a href="/direct/{{ link_id }}" class="download-link"><button>⬇️ Download</button></a>
     </div>
 </body>
 </html>
+
+<!-- END OF FILE server/templates/file.html -->
