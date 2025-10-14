@@ -1,25 +1,25 @@
-from flask import Flask, request, render_template, redirect, url_for, session, jsonify, send_file
+# --- START OF FILE server/app.py ---
+
+from flask import Flask, request, render_template, redirect, url_for, session, jsonify, Response, stream_with_context
 from pymongo import MongoClient
-from werkzeug.utils import secure_filename
 from functools import wraps
 from dotenv import load_dotenv
-import os, datetime, math
-from gridfs import GridFSBucket
+import os, datetime, math, requests
 from bson.objectid import ObjectId
 
 load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "super_secret_key")
 
+# --- Database Setup ---
 client = MongoClient(os.getenv("MONGO_URI"))
 db = client["r2s_bot"]
+links_collection = db["links"] # আমরা এখন "links" নামের একটি কালেকশন ব্যবহার করব
 
-fs = GridFSBucket(db)
-files_collection = db["files"]
-
+# --- Helper Function for Formatting Size ---
 def format_size(size_bytes):
-    if size_bytes == 0:
-        return "0B"
+    if size_bytes == 0 or not isinstance(size_bytes, (int, float)):
+        return "Unknown"
     size_name = ("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
     i = int(math.floor(math.log(size_bytes, 1024)))
     p = math.pow(1024, i)
@@ -30,6 +30,7 @@ def format_size(size_bytes):
 def utility_processor():
     return dict(format_size=format_size)
 
+# --- Authentication ---
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -55,87 +56,123 @@ def logout():
     session.pop("logged_in", None)
     return redirect(url_for("login"))
 
+# --- Core Routes ---
 @app.route("/dashboard")
 @login_required
 def dashboard():
-    all_files = list(files_collection.find().sort("uploaded_at", -1))
-    return render_template("dashboard.html", files=all_files)
+    all_links = list(links_collection.find().sort("added_at", -1))
+    return render_template("dashboard.html", links=all_links)
 
-@app.route("/api/upload", methods=["POST"])
-def api_upload():
+@app.route("/api/add_link", methods=["POST"])
+def api_add_link():
     try:
-        if "file" not in request.files:
-            return jsonify({"status": "error", "message": "No file found"}), 400
-        
-        f = request.files["file"]
-        filename = secure_filename(f.filename)
-        file_size = request.content_length
+        data = request.get_json()
+        url = data.get("url")
+        filename = data.get("filename")
 
-        gridfs_id = fs.upload_from_stream(
-            filename, f.stream, metadata={"contentType": f.mimetype}
-        )
+        if not url:
+            return jsonify({"status": "error", "message": "URL is required"}), 400
         
-        file_doc = {
+        # যদি ব্যবহারকারী ফাইলের নাম না দেয়, URL থেকে একটি নাম বের করার চেষ্টা করুন
+        if not filename:
+            try:
+                # allow_redirects=True গুগল ড্রাইভের মতো লিঙ্কের জন্য সাহায্য করে
+                head_req = requests.head(url, allow_redirects=True, timeout=5)
+                if 'content-disposition' in head_req.headers:
+                    # 'attachment; filename="example.jpg"' থেকে ফাইলের নাম বের করা
+                    cd = head_req.headers['content-disposition']
+                    filename = cd.split('filename=')[-1].strip('"')
+                else:
+                    # যদি কোনো নাম না পাওয়া যায়
+                    filename = url.split('/')[-1] or "downloaded_file"
+            except requests.RequestException:
+                filename = "downloaded_file" # যদি লিঙ্ক কাজ না করে
+
+        link_doc = {
+            "original_url": url,
             "filename": filename,
-            "uploaded_at": datetime.datetime.utcnow(),
-            "size": file_size,
-            "gridfs_id": gridfs_id
+            "added_at": datetime.datetime.utcnow(),
         }
-        result = files_collection.insert_one(file_doc)
+        result = links_collection.insert_one(link_doc)
 
         return jsonify({
             "status": "success",
-            "file": {
+            "link": {
                 "_id": str(result.inserted_id),
                 "filename": filename,
-                "size_formatted": format_size(file_size)
             }
         })
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
-@app.route("/download/<file_id>")
-def download(file_id):
+@app.route("/download/<link_id>")
+def download_page(link_id):
     try:
-        file_info = files_collection.find_one({"_id": ObjectId(file_id)})
-        if file_info:
-            return render_template("file.html", file_info=file_info, file_id=file_id)
-        else:
-            return "❌ File not found", 404
-    except:
-        return "❌ Invalid file ID", 404
+        link_info = links_collection.find_one({"_id": ObjectId(link_id)})
+        if not link_info:
+            return "❌ লিঙ্কটি খুঁজে পাওয়া যায়নি।", 404
+        
+        # ফাইলের আকার বের করার জন্য একটি HEAD রিকোয়েস্ট পাঠানো
+        file_size = 0
+        try:
+            head_req = requests.head(link_info['original_url'], allow_redirects=True, timeout=5)
+            if head_req.status_code == 200 and 'content-length' in head_req.headers:
+                file_size = int(head_req.headers['content-length'])
+        except requests.RequestException:
+            pass # আকার বের করতে না পারলে সমস্যা নেই
 
-@app.route("/direct/<file_id>")
-def direct_download(file_id):
+        link_info['size'] = file_size
+        return render_template("file.html", link_info=link_info, link_id=link_id)
+        
+    except Exception:
+        return "❌ অবৈধ লিঙ্ক আইডি।", 404
+
+@app.route("/direct/<link_id>")
+def direct_download(link_id):
     try:
-        file_info = files_collection.find_one({"_id": ObjectId(file_id)})
-        if not file_info:
-            return "❌ File not found in database", 404
+        link_info = links_collection.find_one({"_id": ObjectId(link_id)})
+        if not link_info:
+            return "❌ এই লিঙ্কের কোনো তথ্য পাওয়া যায়নি।", 404
         
-        grid_out = fs.open_download_stream(file_info['gridfs_id'])
+        original_url = link_info.get("original_url")
         
-        return send_file(
-            grid_out,
-            mimetype=grid_out.metadata.get('contentType', 'application/octet-stream'),
-            as_attachment=True,
-            download_name=file_info['filename']
-        )
+        req = requests.get(original_url, stream=True, allow_redirects=True, timeout=10)
+
+        if req.status_code != 200:
+            error_map = {
+                404: "মূল লিঙ্ক থেকে ফাইলটি খুঁজে পাওয়া যায়নি (Error 404)।",
+                403: "এই ফাইলটি ডাউনলোড করার অনুমতি নেই (Error 403)।",
+            }
+            return error_map.get(req.status_code, f"মূল সার্ভারে একটি সমস্যা হয়েছে (Error {req.status_code})।"), req.status_code
+
+        content_type = req.headers.get('content-type', '')
+        if 'text/html' in content_type:
+            return "❌ প্রদত্ত লিঙ্কটি সরাসরি ডাউনলোড লিঙ্ক নয়। এটি একটি ওয়েবপেজ।", 400
+
+        headers = {
+            'Content-Disposition': f'attachment; filename="{link_info["filename"]}"',
+            'Content-Type': content_type,
+            'Content-Length': req.headers.get('content-length'),
+        }
+
+        return Response(stream_with_context(req.iter_content(chunk_size=8192)), headers=headers)
+
+    except requests.exceptions.RequestException as e:
+        return f"❌ মূল লিঙ্কের সাথে সংযোগ স্থাপন করা যাচ্ছে না। Error: {e}", 500
     except Exception as e:
-        return "❌ File not found or error occurred", 404
+        return f"❌ একটি অপ্রত্যাশিত সমস্যা হয়েছে: {str(e)}", 500
 
-@app.route("/delete/<file_id>", methods=["POST"])
+@app.route("/delete/<link_id>", methods=["POST"])
 @login_required
-def delete_file(file_id):
+def delete_link(link_id):
     try:
-        file_info = files_collection.find_one({"_id": ObjectId(file_id)})
-        if file_info:
-            fs.delete(file_info['gridfs_id'])
-            files_collection.delete_one({"_id": ObjectId(file_id)})
+        result = links_collection.delete_one({"_id": ObjectId(link_id)})
+        if result.deleted_count == 1:
             return redirect(url_for("dashboard"))
         else:
-            return "File not found", 404
+            return "লিঙ্কটি খুঁজে পাওয়া যায়নি।", 404
     except Exception as e:
-        return f"An error occurred: {str(e)}", 500
+        return f"একটি সমস্যা হয়েছে: {str(e)}", 500
 
 @app.route("/")
 def home():
@@ -143,3 +180,5 @@ def home():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
+
+# --- END OF FILE server/app.py ---
