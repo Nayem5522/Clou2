@@ -4,7 +4,7 @@ from flask import Flask, request, render_template, redirect, url_for, session, j
 from pymongo import MongoClient
 from functools import wraps
 from dotenv import load_dotenv
-import os, datetime, math, requests
+import os, datetime, math, requests, re # re (regex) মডিউল ইম্পোর্ট করা হয়েছে
 from bson.objectid import ObjectId
 
 load_dotenv()
@@ -14,7 +14,24 @@ app.secret_key = os.getenv("SECRET_KEY", "super_secret_key")
 # --- Database Setup ---
 client = MongoClient(os.getenv("MONGO_URI"))
 db = client["r2s_bot"]
-links_collection = db["links"] # আমরা এখন "links" নামের একটি কালেকশন ব্যবহার করব
+links_collection = db["links"]
+
+# <<< NEW FUNCTION TO HANDLE GOOGLE DRIVE LINKS >>>
+def convert_google_drive_url(url):
+    """
+    Checks if a URL is a Google Drive share link and converts it to a direct download link.
+    """
+    # Regex to capture the file ID from various Google Drive URL formats
+    pattern = r"drive\.google\.com/file/d/([a-zA-Z0-9_-]+)"
+    match = re.search(pattern, url)
+    
+    if match:
+        file_id = match.group(1)
+        # Return the direct download link format
+        return f"https://drive.google.com/uc?export=download&id={file_id}"
+    
+    # If it's not a matching Google Drive link, return the original URL
+    return url
 
 # --- Helper Function for Formatting Size ---
 def format_size(size_bytes):
@@ -41,6 +58,7 @@ def login_required(f):
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    # ... (No changes here) ...
     if request.method == "POST":
         username = request.form.get("username")
         password = request.form.get("password")
@@ -53,6 +71,7 @@ def login():
 
 @app.route("/logout")
 def logout():
+    # ... (No changes here) ...
     session.pop("logged_in", None)
     return redirect(url_for("login"))
 
@@ -60,6 +79,7 @@ def logout():
 @app.route("/dashboard")
 @login_required
 def dashboard():
+    # ... (No changes here) ...
     all_links = list(links_collection.find().sort("added_at", -1))
     return render_template("dashboard.html", links=all_links)
 
@@ -67,29 +87,30 @@ def dashboard():
 def api_add_link():
     try:
         data = request.get_json()
-        url = data.get("url")
+        original_url = data.get("url")
         filename = data.get("filename")
 
-        if not url:
+        if not original_url:
             return jsonify({"status": "error", "message": "URL is required"}), 400
         
-        # যদি ব্যবহারকারী ফাইলের নাম না দেয়, URL থেকে একটি নাম বের করার চেষ্টা করুন
+        # <<< MODIFIED LINE: Process the URL to handle Google Drive links >>>
+        processed_url = convert_google_drive_url(original_url)
+
         if not filename:
             try:
-                # allow_redirects=True গুগল ড্রাইভের মতো লিঙ্কের জন্য সাহায্য করে
-                head_req = requests.head(url, allow_redirects=True, timeout=5)
-                if 'content-disposition' in head_req.headers:
-                    # 'attachment; filename="example.jpg"' থেকে ফাইলের নাম বের করা
+                # Use the processed URL to get headers
+                head_req = requests.head(processed_url, allow_redirects=True, timeout=10)
+                if head_req.status_code == 200 and 'content-disposition' in head_req.headers:
                     cd = head_req.headers['content-disposition']
-                    filename = cd.split('filename=')[-1].strip('"')
+                    filename = re.search(r'filename="?([^"]+)"?', cd).group(1)
                 else:
-                    # যদি কোনো নাম না পাওয়া যায়
-                    filename = url.split('/')[-1] or "downloaded_file"
+                    filename = processed_url.split('/')[-1].split('?')[0] or "downloaded_file"
             except requests.RequestException:
-                filename = "downloaded_file" # যদি লিঙ্ক কাজ না করে
+                filename = "file_name_not_found"
 
         link_doc = {
-            "original_url": url,
+            # <<< MODIFIED LINE: Save the processed URL to the database >>>
+            "original_url": processed_url,
             "filename": filename,
             "added_at": datetime.datetime.utcnow(),
         }
@@ -105,6 +126,8 @@ def api_add_link():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
+# ... (The rest of the file remains the same, as the database now stores the direct link) ...
+
 @app.route("/download/<link_id>")
 def download_page(link_id):
     try:
@@ -112,14 +135,13 @@ def download_page(link_id):
         if not link_info:
             return "❌ লিঙ্কটি খুঁজে পাওয়া যায়নি।", 404
         
-        # ফাইলের আকার বের করার জন্য একটি HEAD রিকোয়েস্ট পাঠানো
         file_size = 0
         try:
             head_req = requests.head(link_info['original_url'], allow_redirects=True, timeout=5)
             if head_req.status_code == 200 and 'content-length' in head_req.headers:
                 file_size = int(head_req.headers['content-length'])
         except requests.RequestException:
-            pass # আকার বের করতে না পারলে সমস্যা নেই
+            pass
 
         link_info['size'] = file_size
         return render_template("file.html", link_info=link_info, link_id=link_id)
