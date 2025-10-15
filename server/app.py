@@ -168,7 +168,7 @@ def direct_download(link_id):
 
         # --- BRANCH 2: REGULAR DIRECT LINK DOWNLOADER ---
         else:
-            req = requests.get(link_info['original_url'], stream=True, allow_redirects=True, timeout=10)
+            req = requests.get(link_info['original_url'], stream=True, allow_redirects=True, timeout=30)
             if req.status_code != 200: 
                 return f"Error fetching from source server: Status {req.status_code}", 502
 
