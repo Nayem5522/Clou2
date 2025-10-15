@@ -17,10 +17,12 @@
         li { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #dee2e6; }
         li:last-child { border-bottom: none; }
         .file-info { color: #495057; word-break: break-all; }
-        .file-actions form { display: inline; margin-left: 5px; }
-        .file-actions a, .file-actions button { text-decoration: none; padding: 6px 12px; border-radius: 5px; color: white; border: none; cursor: pointer; font-size: 14px; white-space: nowrap; }
+        .file-actions form { display: inline; }
+        .file-actions a, .file-actions button { text-decoration: none; padding: 6px 12px; border-radius: 5px; color: white; border: none; cursor: pointer; font-size: 14px; white-space: nowrap; margin-left: 5px; }
         .view-btn { background-color: #007bff; } .view-btn:hover { background-color: #0069d9; }
         .direct-btn { background-color: #28a745; } .direct-btn:hover { background-color: #218838; }
+        /* --- CHANGE 3: Style for the new button --- */
+        .original-btn { background-color: #6c757d; } .original-btn:hover { background-color: #5a6268; }
         .delete-btn { background-color: #dc3545; } .delete-btn:hover { background-color: #c82333; }
         #formStatus { text-align: center; margin-top: 10px; font-weight: bold; }
     </style>
@@ -29,13 +31,11 @@
     <div class="container">
         <h2>🔗 Link Dashboard</h2>
         <form id="addLinkForm">
-            <input type="url" name="url" id="urlInput" placeholder="Enter direct download URL" required>
-            <input type="text" name="filename" id="filenameInput" placeholder="Enter filename (optional)">
+            <input type="url" name="url" id="urlInput" placeholder="Enter download URL (Drive or Direct)" required>
+            <input type="text" name="filename" id="filenameInput" placeholder="Enter custom filename (optional)">
             <button type="submit">Add Link</button>
         </form>
-
         <p id="formStatus"></p>
-
         <h3>🗂 Added Links</h3>
         <ul id="linkList">
             {% for link in links %}
@@ -43,8 +43,10 @@
                 <span class="file-info">{{ link.filename }}</span>
                 <div class="file-actions">
                     <a href="/download/{{ link._id }}" class="view-btn">View</a>
-                    <a href="/direct/{{ link._id }}" class="direct-btn">Direct</a>
-                    <form action="/delete/{{ link._id }}" method="POST" onsubmit="return confirm('Are you sure you want to delete this link?');">
+                    <a href="/direct/{{ link._id }}" class="direct-btn" target="_blank">Direct</a>
+                    <!-- --- CHANGE 3: The new "Original" button --- -->
+                    <a href="{{ link.original_url }}" class="original-btn" target="_blank">Original</a>
+                    <form action="/delete/{{ link._id }}" method="POST" onsubmit="return confirm('Are you sure?');">
                         <button type="submit" class="delete-btn">Delete</button>
                     </form>
                 </div>
@@ -53,24 +55,20 @@
         </ul>
         <a href="/logout" style="float: right; margin-top: 20px;"><button>Logout</button></a>
     </div>
-
     <script>
+        // Javascript for this page remains the same as before
         const addLinkForm = document.getElementById('addLinkForm');
         const urlInput = document.getElementById('urlInput');
         const filenameInput = document.getElementById('filenameInput');
         const formStatus = document.getElementById('formStatus');
         const linkList = document.getElementById('linkList');
-
         addLinkForm.addEventListener('submit', (e) => {
             e.preventDefault();
             const url = urlInput.value.trim();
             const filename = filenameInput.value.trim();
-
             if (!url) return;
-            
             formStatus.textContent = 'Adding link...';
             formStatus.style.color = '#333';
-
             fetch('/api/add_link', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -81,7 +79,6 @@
                 if (data.status === 'success') {
                     formStatus.innerHTML = `✅ Link for <strong>${data.link.filename}</strong> added successfully!`;
                     formStatus.style.color = 'green';
-                    
                     const newLink = data.link;
                     const newListItem = document.createElement('li');
                     newListItem.id = `link-${newLink._id}`;
@@ -89,8 +86,9 @@
                         <span class="file-info">${newLink.filename}</span>
                         <div class="file-actions">
                             <a href="/download/${newLink._id}" class="view-btn">View</a>
-                            <a href="/direct/${newLink._id}" class="direct-btn">Direct</a>
-                            <form action="/delete/${newLink._id}" method="POST" onsubmit="return confirm('Are you sure you want to delete this link?');">
+                            <a href="/direct/${newLink._id}" class="direct-btn" target="_blank">Direct</a>
+                            <a href="${url}" class="original-btn" target="_blank">Original</a>
+                            <form action="/delete/${newLink._id}" method="POST" onsubmit="return confirm('Are you sure?');">
                                 <button type="submit" class="delete-btn">Delete</button>
                             </form>
                         </div>
@@ -105,7 +103,6 @@
             .catch(error => {
                 formStatus.textContent = '❌ An error occurred.';
                 formStatus.style.color = 'red';
-                console.error('Error:', error);
             });
         });
     </script>
