@@ -6,9 +6,10 @@ from functools import wraps
 from dotenv import load_dotenv
 import os, datetime, math, requests, re, io
 from bson.objectid import ObjectId
-# <<< NEW IMPORTS FOR GOOGLE DRIVE API >>>
+# Google Drive API Imports
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
+from google.auth.exceptions import DefaultCredentialsError
 
 load_dotenv()
 app = Flask(__name__)
@@ -18,7 +19,7 @@ app.secret_key = os.getenv("SECRET_KEY", "super_secret_key")
 client = MongoClient(os.getenv("MONGO_URI"))
 db = client["r2s_bot"]
 links_collection = db["links"]
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY") # API Key from environment
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 # --- Helper Functions ---
 def extract_google_drive_file_id(url):
@@ -79,10 +80,16 @@ def api_add_link():
         file_id = extract_google_drive_file_id(url)
         is_gdrive = bool(file_id)
 
-        if not filename and is_gdrive and GOOGLE_API_KEY:
-             service = build('drive', 'v3', developerKey=GOOGLE_API_KEY)
-             file_metadata = service.files().get(fileId=file_id, fields='name').execute()
-             filename = file_metadata.get('name', 'Google Drive File')
+        if not filename and is_gdrive:
+            try:
+                if not GOOGLE_API_KEY: raise ValueError("Google API Key not configured.")
+                service = build('drive', 'v3', developerKey=GOOGLE_API_KEY)
+                file_metadata = service.files().get(fileId=file_id, fields='name').execute()
+                filename = file_metadata.get('name', 'Google Drive File')
+            except (ValueError, DefaultCredentialsError) as e:
+                 return jsonify({"status": "error", "message": str(e)}), 500
+            except Exception:
+                 filename = "Google Drive File" # Fallback
         elif not filename:
             filename = "Direct Link File"
 
@@ -105,41 +112,44 @@ def download_page(link_id):
         if not link_info: return "❌ লিঙ্কটি খুঁজে পাওয়া যায়নি।", 404
         
         file_size = None
-        if link_info.get("is_gdrive") and GOOGLE_API_KEY:
-            service = build('drive', 'v3', developerKey=GOOGLE_API_KEY)
-            file_metadata = service.files().get(fileId=link_info['file_id'], fields='size').execute()
-            file_size = int(file_metadata.get('size', 0))
+        try:
+            if link_info.get("is_gdrive"):
+                if not GOOGLE_API_KEY: raise ValueError("API Key not found")
+                service = build('drive', 'v3', developerKey=GOOGLE_API_KEY)
+                file_metadata = service.files().get(fileId=link_info['file_id'], fields='size').execute()
+                file_size = int(file_metadata.get('size', 0))
+            else:
+                with requests.head(link_info['original_url'], allow_redirects=True, timeout=5) as head_req:
+                    if head_req.status_code == 200 and 'content-length' in head_req.headers:
+                        file_size = int(head_req.headers['content-length'])
+        except Exception:
+            pass # It's okay if size cannot be determined
+
         link_info['size'] = file_size
         return render_template("file.html", link_info=link_info, link_id=link_id)
     except Exception: return "❌ অবৈধ লিঙ্ক আইডি।", 404
 
-# <<< FINAL AND MOST RELIABLE /direct DOWNLOAD ROUTE >>>
 @app.route("/direct/<link_id>")
 def direct_download(link_id):
     try:
         link_info = links_collection.find_one({"_id": ObjectId(link_id)})
         if not link_info: return "❌ এই লিঙ্কের কোনো তথ্য পাওয়া যায়নি।", 404
         
-        # --- GOOGLE DRIVE API DOWNLOADER ---
+        # --- BRANCH 1: GOOGLE DRIVE API DOWNLOADER ---
         if link_info.get("is_gdrive"):
             if not GOOGLE_API_KEY: return "Google Drive API Key is not configured.", 500
             
             file_id = link_info['file_id']
             service = build('drive', 'v3', developerKey=GOOGLE_API_KEY)
-            
-            # Get file metadata for name and size
-            metadata = service.files().get(fileId=file_id, fields='name, size').execute()
+            metadata = service.files().get(fileId=file_id, fields='name, size, mimeType').execute()
             filename = metadata.get('name')
             filesize = metadata.get('size')
+            mimetype = metadata.get('mimeType')
 
-            # Request to download the file
             request_to_gdrive = service.files().get_media(fileId=file_id)
-            
-            # In-memory buffer to stream the file
             fh = io.BytesIO()
             downloader = MediaIoBaseDownload(fh, request_to_gdrive, chunksize=1024*1024)
             
-            # Generator function to stream the content
             def generate_content():
                 done = False
                 while not done:
@@ -152,17 +162,20 @@ def direct_download(link_id):
             headers = {
                 'Content-Disposition': f'attachment; filename="{filename}"',
                 'Content-Length': filesize,
+                'Content-Type': mimetype
             }
             return Response(stream_with_context(generate_content()), headers=headers)
 
-        # --- REGULAR DIRECT LINK DOWNLOADER ---
+        # --- BRANCH 2: REGULAR DIRECT LINK DOWNLOADER ---
         else:
-            req = requests.get(link_info['original_url'], stream=True, allow_redirects=True)
-            if req.status_code != 200: return f"Error fetching from source: {req.status_code}", 500
+            req = requests.get(link_info['original_url'], stream=True, allow_redirects=True, timeout=10)
+            if req.status_code != 200: 
+                return f"Error fetching from source server: Status {req.status_code}", 502
+
             headers = {
                 'Content-Disposition': f'attachment; filename="{link_info["filename"]}"',
                 'Content-Length': req.headers.get('content-length'),
-                'Content-Type': req.headers.get('content-type')
+                'Content-Type': req.headers.get('content-type', 'application/octet-stream')
             }
             return Response(stream_with_context(req.iter_content(chunk_size=8192)), headers=headers)
 
@@ -188,3 +201,5 @@ def home():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
+
+# --- END OF FILE server/app.py ---
