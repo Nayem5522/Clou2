@@ -8,7 +8,6 @@ import os, datetime, math, requests, re, io
 from bson.objectid import ObjectId
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
-from google.auth.exceptions import DefaultCredentialsError
 
 load_dotenv()
 app = Flask(__name__)
@@ -19,18 +18,20 @@ db = client["r2s_bot"]
 links_collection = db["links"]
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
-# --- Helper Functions (No changes here) ---
+# <<< RE-IMPLEMENTING THE QUEUE SYSTEM >>>
+ACTIVE_DOWNLOADS = 0
+# For Render Free Tier, it's safest to keep this at 1. You can try 2 on a paid plan.
+MAX_CONCURRENT_DOWNLOADS = 1 
+
 def extract_google_drive_file_id(url):
-    pattern = r"drive\.google\.com/(?:file/d/|open\?id=)([a-zA-Z0-9_-]+)"
-    match = re.search(pattern, url)
-    return match.group(1) if match else None
+    pattern = r"drive\.google\.com/(?:file/d/|open\?id=)([a-zA-Z0-9_-]+)"; match = re.search(pattern, url); return match.group(1) if match else None
 def format_size(size_bytes):
     if size_bytes is None or not isinstance(size_bytes, (int, float)) or size_bytes <= 0: return "Unknown"
     size_name = ("B", "KB", "MB", "GB", "TB"); i = int(math.floor(math.log(size_bytes, 1024))); p = math.pow(1024, i); s = round(size_bytes / p, 2); return f"{s} {size_name[i]}"
 @app.context_processor
 def utility_processor(): return dict(format_size=format_size)
 
-# --- Auth routes (No changes here) ---
+# ... (Auth routes remain unchanged) ...
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -52,14 +53,14 @@ def dashboard(): all_links = list(links_collection.find().sort("added_at", -1));
 
 @app.route("/api/add_link", methods=["POST"])
 def api_add_link():
-    # This logic remains the same
+    # ... (No changes here, this part is correct) ...
     try:
         data = request.get_json(); url = data.get("url"); filename = data.get("filename")
         file_id = extract_google_drive_file_id(url); is_gdrive = bool(file_id)
         if not filename:
             try:
                 if is_gdrive:
-                    if not GOOGLE_API_KEY: raise ValueError("Google API Key not configured.")
+                    if not GOOGLE_API_KEY: raise ValueError("API Key missing")
                     service = build('drive', 'v3', developerKey=GOOGLE_API_KEY)
                     filename = service.files().get(fileId=file_id, fields='name').execute().get('name')
                 else:
@@ -67,38 +68,53 @@ def api_add_link():
                         if 'content-disposition' in h.headers: filename = re.search(r'filename="?([^"]+)"?', h.headers['content-disposition']).group(1)
             except Exception: filename = url.split('/')[-1] or "File"
         link_doc = {"original_url": url, "filename": filename, "is_gdrive": is_gdrive, "file_id": file_id, "added_at": datetime.datetime.utcnow()}
-        result = links_collection.insert_one(link_doc)
-        return jsonify({"status": "success", "link": {"_id": str(result.inserted_id), "filename": filename}})
+        links_collection.insert_one(link_doc)
+        return jsonify({"status": "success", "link": {"_id": str(link_doc['_id']), "filename": filename}})
     except Exception as e: return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route("/download/<link_id>")
 def download_page(link_id):
-    # More robust size fetching
     try:
         link_info = links_collection.find_one({"_id": ObjectId(link_id)})
         if not link_info: return "❌ লিঙ্কটি খুঁজে পাওয়া যায়নি।", 404
+        # Fetch size for display
         file_size = None
         try:
             if link_info.get("is_gdrive"):
-                if GOOGLE_API_KEY:
-                    service = build('drive', 'v3', developerKey=GOOGLE_API_KEY)
-                    file_size = int(service.files().get(fileId=link_info['file_id'], fields='size').execute().get('size', 0))
+                service = build('drive', 'v3', developerKey=GOOGLE_API_KEY)
+                file_size = int(service.files().get(fileId=link_info['file_id'], fields='size').execute().get('size', 0))
             else:
                 with requests.head(link_info['original_url'], allow_redirects=True, timeout=5) as h:
                     if h.status_code == 200 and 'content-length' in h.headers: file_size = int(h.headers['content-length'])
         except Exception: pass
         link_info['size'] = file_size
-        return render_template("file.html", link_info=link_info, link_id=link_id)
+        return render_template("file.html", link_info=link_info, link_id=link_id, limit=MAX_CONCURRENT_DOWNLOADS)
     except Exception: return "❌ অবৈধ লিঙ্ক আইডি।", 404
 
-# No queue system needed anymore with gevent, so these API routes are removed.
-# The /direct/ route is simplified.
+# <<< RE-IMPLEMENTING THE STATUS API FOR THE QUEUE >>>
+@app.route("/api/status")
+def api_status():
+    global ACTIVE_DOWNLOADS
+    if ACTIVE_DOWNLOADS < MAX_CONCURRENT_DOWNLOADS:
+        return jsonify({"status": "ready"})
+    else:
+        return jsonify({"status": "busy", "active": ACTIVE_DOWNLOADS, "limit": MAX_CONCURRENT_DOWNLOADS})
+
+def decrement_downloader():
+    global ACTIVE_DOWNLOADS
+    if ACTIVE_DOWNLOADS > 0: ACTIVE_DOWNLOADS -= 1
+
 @app.route("/direct/<link_id>")
 def direct_download(link_id):
+    global ACTIVE_DOWNLOADS
+    if ACTIVE_DOWNLOADS >= MAX_CONCURRENT_DOWNLOADS: return "Server is busy", 429
+    
+    ACTIVE_DOWNLOADS += 1
     try:
         link_info = links_collection.find_one({"_id": ObjectId(link_id)})
-        if not link_info: return "❌ এই লিঙ্কের কোনো তথ্য পাওয়া যায়নি।", 404
+        # ... (The download logic for both GDrive and Direct links is correct and remains the same) ...
         if link_info.get("is_gdrive"):
+            # GDrive logic
             service = build('drive', 'v3', developerKey=GOOGLE_API_KEY)
             metadata = service.files().get(fileId=link_info['file_id'], fields='name, size, mimeType').execute()
             filename, filesize, mimetype = metadata.get('name'), metadata.get('size'), metadata.get('mimeType')
@@ -107,13 +123,19 @@ def direct_download(link_id):
                 done = False
                 while not done: status, done = downloader.next_chunk(); fh.seek(0); yield fh.read(); fh.seek(0); fh.truncate()
             headers = {'Content-Disposition': f'attachment; filename="{filename}"', 'Content-Length': filesize, 'Content-Type': mimetype}
-            return Response(stream_with_context(generate()), headers=headers)
+            response = Response(stream_with_context(generate()), headers=headers)
         else:
+            # Direct link logic
             req = requests.get(link_info['original_url'], stream=True, allow_redirects=True, timeout=30)
-            if req.status_code != 200: return f"Error: {req.status_code}", 502
+            if req.status_code != 200: raise ConnectionError(f"Source server returned status {req.status_code}")
             headers = {'Content-Disposition': f'attachment; filename="{link_info["filename"]}"', 'Content-Length': req.headers.get('content-length'), 'Content-Type': req.headers.get('content-type', 'application/octet-stream')}
-            return Response(stream_with_context(req.iter_content(chunk_size=8192)), headers=headers)
-    except Exception as e: return f"❌ একটি অপ্রত্যাশিত সমস্যা হয়েছে: {e}", 500
+            response = Response(stream_with_context(req.iter_content(chunk_size=8192)), headers=headers)
+        
+        response.call_on_close(decrement_downloader) # This is crucial! It decrements the counter when download finishes/fails.
+        return response
+    except Exception as e:
+        decrement_downloader() # Decrement counter if an error happens before streaming starts.
+        return f"❌ একটি অপ্রত্যাশিত সমস্যা হয়েছে: {e}", 500
 
 # ... (Delete and home routes remain unchanged) ...
 @app.route("/delete/<link_id>", methods=["POST"])
