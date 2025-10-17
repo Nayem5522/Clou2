@@ -28,8 +28,8 @@
 
         <div id="waiting-ui">
             <div class="loader"></div>
-            <p id="status-text">Checking server availability...</p>
-            <small>Please wait, your download will start automatically.</small>
+            <p id="status-text">Checking server status...</p>
+            <small>Your download will start automatically when a slot is free.</small>
         </div>
     </div>
 
@@ -39,7 +39,6 @@
         const waitingUi = document.getElementById('waiting-ui');
         const statusText = document.getElementById('status-text');
         const linkId = "{{ link_id }}";
-        const serverLimit = parseInt("{{ limit }}"); // Make sure this is a number
         
         let statusInterval;
 
@@ -50,9 +49,8 @@
             downloadUi.style.display = 'none';
             waitingUi.style.display = 'block';
             
-            // Start checking the status immediately, then set an interval
             checkStatus();
-            statusInterval = setInterval(checkStatus, 4000); // Check every 4 seconds
+            statusInterval = setInterval(checkStatus, 3000); // প্রতি ৩ সেকেন্ডে চেক করবে
         }
 
         function checkStatus() {
@@ -60,15 +58,10 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'ready') {
-                        // Server is ready, stop checking and start the download
                         clearInterval(statusInterval);
-                        statusText.textContent = "✅ Slot available! Starting download...";
+                        statusText.textContent = "✅ Server is ready! Starting download...";
                         statusText.style.color = 'green';
-                        
-                        // Redirecting will trigger the download in the browser
                         window.location.href = `/direct/${linkId}`;
-                        
-                        // In case the user stays on the page, revert the UI after a few seconds
                         setTimeout(() => {
                            waitingUi.style.display = 'none';
                            downloadUi.style.display = 'block';
@@ -76,15 +69,13 @@
                         }, 5000);
 
                     } else {
-                        // Server is busy, show the waiting message
-                        statusText.textContent = `Server is overloaded. Please wait... (${data.active}/${data.limit} running)`;
+                        statusText.textContent = `Server is Overloaded. Please wait...`;
                         statusText.style.color = '#dc3545';
                     }
                 })
                 .catch(error => {
                     clearInterval(statusInterval);
                     statusText.textContent = '⚠️ Connection error. Please refresh and try again.';
-                    console.error('Error polling status:', error);
                 });
         }
     </script>
