@@ -15,8 +15,10 @@ app.secret_key = os.getenv("SECRET_KEY", "super_secret_key")
 client = MongoClient(os.getenv("MONGO_URI"))
 db = client["r2s_bot"]
 links_collection = db["links"]
+settings_collection = db["settings"] # <<< বিজ্ঞাপন কোড সেভ করার জন্য নতুন কালেকশন
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
+# ... (Helper functions remain the same) ...
 def extract_google_drive_file_id(url):
     pattern = r"drive\.google\.com/(?:file/d/|open\?id=)([a-zA-Z0-9_-]+)"; match = re.search(pattern, url); return match.group(1) if match else None
 def format_size(size_bytes):
@@ -25,7 +27,7 @@ def format_size(size_bytes):
 @app.context_processor
 def utility_processor(): return dict(format_size=format_size)
 
-# ... (Auth routes remain unchanged) ...
+# ... (Auth routes remain the same) ...
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -41,19 +43,34 @@ def login():
     return render_template("login.html")
 @app.route("/logout")
 def logout(): session.pop("logged_in", None); return redirect(url_for("login"))
+@app.route("/")
+def home(): return redirect(url_for("login"))
+
 @app.route("/dashboard")
 @login_required
 def dashboard(): all_links = list(links_collection.find().sort("added_at", -1)); return render_template("dashboard.html", links=all_links)
-@app.route("/")
-def home(): return redirect(url_for("login"))
-@app.route("/delete/<link_id>", methods=["POST"])
+
+# <<< NEW ROUTE FOR MANAGING ADS >>>
+@app.route("/admin/ads", methods=["GET", "POST"])
 @login_required
-def delete_link(link_id):
-    links_collection.delete_one({"_id": ObjectId(link_id)}); return redirect(url_for("dashboard"))
+def manage_ads():
+    if request.method == "POST":
+        ads_doc = {
+            "header_ad": request.form.get("header_ad"),
+            "details_ad": request.form.get("details_ad"),
+            "footer_ad": request.form.get("footer_ad")
+        }
+        # Update existing ad settings or insert a new one if it doesn't exist
+        settings_collection.update_one({}, {"$set": ads_doc}, upsert=True)
+        return redirect(url_for("manage_ads"))
+    
+    # Fetch existing ad codes to display in the form
+    current_ads = settings_collection.find_one() or {}
+    return render_template("ads.html", ads=current_ads)
 
 @app.route("/api/add_link", methods=["POST"])
 def api_add_link():
-    # ... (No changes here, this part is correct) ...
+    # ... (No changes here) ...
     try:
         data = request.get_json(); url = data.get("url"); filename = data.get("filename")
         file_id = extract_google_drive_file_id(url); is_gdrive = bool(file_id)
@@ -75,42 +92,35 @@ def download_page(link_id):
         link_info = links_collection.find_one({"_id": ObjectId(link_id)})
         if not link_info: return "❌ লিঙ্কটি খুঁজে পাওয়া যায়নি।", 404
         
-        # <<< ROBUST SIZE FETCHING >>>
-        file_size = None
+        # <<< FETCH ADS TO DISPLAY ON THE PAGE >>>
+        ads = settings_collection.find_one() or {}
+        
+        file_size = None # Size fetching logic is the same
         try:
             if link_info.get("is_gdrive"):
-                if GOOGLE_API_KEY:
-                    service = build('drive', 'v3', developerKey=GOOGLE_API_KEY)
-                    file_size = int(service.files().get(fileId=link_info['file_id'], fields='size').execute().get('size', 0))
+                if GOOGLE_API_KEY: service = build('drive', 'v3', developerKey=GOOGLE_API_KEY); file_size = int(service.files().get(fileId=link_info['file_id'], fields='size').execute().get('size', 0))
             else:
                 with requests.head(link_info['original_url'], allow_redirects=True, timeout=5) as h:
-                    if h.status_code == 200 and 'content-length' in h.headers:
-                        file_size = int(h.headers['content-length'])
-        except Exception:
-            pass # It's okay if size cannot be determined
-        
+                    if h.status_code == 200 and 'content-length' in h.headers: file_size = int(h.headers['content-length'])
+        except Exception: pass
         link_info['size'] = file_size
-        return render_template("file.html", link_info=link_info, link_id=link_id)
+        
+        return render_template("file.html", link_info=link_info, link_id=link_id, ads=ads)
     except Exception: return "❌ অবৈধ লিঙ্ক আইডি।", 404
 
-# <<< THE FINAL, SIMPLIFIED, AND RELIABLE DOWNLOAD ROUTE >>>
+# ... (Redirect and Delete routes remain the same) ...
 @app.route("/direct/<link_id>")
 def direct_download(link_id):
     try:
-        link_info = links_collection.find_one({"_id": ObjectId(link_id)})
+        link_info = links_collection.find_one({"_id": ObjectId(link_id)});
         if not link_info: return "Link not found", 404
-        
-        if link_info.get("is_gdrive"):
-            # For Google Drive, we construct the direct download link that forces download
-            file_id = link_info['file_id']
-            final_url = f"https://drive.google.com/uc?export=download&id={file_id}"
-            return redirect(final_url)
-        else:
-            # For other links, we just redirect to the original URL
-            return redirect(link_info['original_url'])
-            
-    except Exception as e:
-        return f"An error occurred: {e}", 500
+        if link_info.get("is_gdrive"): return redirect(f"https://drive.google.com/uc?export=download&id={link_info['file_id']}")
+        else: return redirect(link_info['original_url'])
+    except Exception as e: return f"An error occurred: {e}", 500
+@app.route("/delete/<link_id>", methods=["POST"])
+@login_required
+def delete_link(link_id):
+    links_collection.delete_one({"_id": ObjectId(link_id)}); return redirect(url_for("dashboard"))
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
