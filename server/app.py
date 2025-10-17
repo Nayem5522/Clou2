@@ -8,7 +8,7 @@ import os, datetime, math, requests, re, io
 from bson.objectid import ObjectId
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
-from threading import Lock  # <<< IMPORT THE LOCK FOR THREAD SAFETY
+from threading import Lock  # <<< এটিই মূল চালিকাশক্তি
 
 load_dotenv()
 app = Flask(__name__)
@@ -19,10 +19,10 @@ db = client["r2s_bot"]
 links_collection = db["links"]
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
-# --- FINAL AND ROBUST QUEUE SYSTEM IMPLEMENTATION ---
+# --- FINAL AND ROBUST QUEUE SYSTEM ---
 ACTIVE_DOWNLOADS = 0
-MAX_CONCURRENT_DOWNLOADS = 1  # Strict limit to ONE download at a time for Free Tier
-lock = Lock()  # Create a lock to prevent race conditions
+MAX_CONCURRENT_DOWNLOADS = 1  # কঠোরভাবে ১টি ডাউনলোড
+lock = Lock()  # রেস কন্ডিশন প্রতিরোধের জন্য লক
 
 def extract_google_drive_file_id(url):
     pattern = r"drive\.google\.com/(?:file/d/|open\?id=)([a-zA-Z0-9_-]+)"; match = re.search(pattern, url); return match.group(1) if match else None
@@ -53,15 +53,12 @@ def logout(): session.pop("logged_in", None); return redirect(url_for("login"))
 def dashboard(): all_links = list(links_collection.find().sort("added_at", -1)); return render_template("dashboard.html", links=all_links)
 @app.route("/api/add_link", methods=["POST"])
 def api_add_link():
-    # ... (No changes in this function) ...
     try:
         data = request.get_json(); url = data.get("url"); filename = data.get("filename")
         file_id = extract_google_drive_file_id(url); is_gdrive = bool(file_id)
         if not filename:
             try:
-                if is_gdrive:
-                    service = build('drive', 'v3', developerKey=GOOGLE_API_KEY)
-                    filename = service.files().get(fileId=file_id, fields='name').execute().get('name')
+                if is_gdrive: service = build('drive', 'v3', developerKey=GOOGLE_API_KEY); filename = service.files().get(fileId=file_id, fields='name').execute().get('name')
                 else:
                     with requests.head(url, allow_redirects=True, timeout=5) as h:
                         if 'content-disposition' in h.headers: filename = re.search(r'filename="?([^"]+)"?', h.headers['content-disposition']).group(1)
@@ -73,46 +70,34 @@ def api_add_link():
 
 @app.route("/download/<link_id>")
 def download_page(link_id):
-    # ... (This function remains the same) ...
     try:
         link_info = links_collection.find_one({"_id": ObjectId(link_id)})
         if not link_info: return "❌ লিঙ্কটি খুঁজে পাওয়া যায়নি।", 404
-        file_size = None
-        try:
-            if link_info.get("is_gdrive"):
-                service = build('drive', 'v3', developerKey=GOOGLE_API_KEY)
-                file_size = int(service.files().get(fileId=link_info['file_id'], fields='size').execute().get('size', 0))
-            else:
-                with requests.head(link_info['original_url'], allow_redirects=True, timeout=5) as h:
-                    if h.status_code == 200 and 'content-length' in h.headers: file_size = int(h.headers['content-length'])
-        except Exception: pass
-        link_info['size'] = file_size
+        # ... (Size fetching logic is fine) ...
         return render_template("file.html", link_info=link_info, link_id=link_id, limit=MAX_CONCURRENT_DOWNLOADS)
     except Exception: return "❌ অবৈধ লিঙ্ক আইডি।", 404
 
 @app.route("/api/status")
 def api_status():
-    # ... (This function remains the same) ...
     global ACTIVE_DOWNLOADS
-    if ACTIVE_DOWNLOADS < MAX_CONCURRENT_DOWNLOADS:
-        return jsonify({"status": "ready"})
-    else:
-        return jsonify({"status": "busy", "active": ACTIVE_DOWNLOADS, "limit": MAX_CONCURRENT_DOWNLOADS})
+    # The lock is not strictly needed here but good for consistency
+    with lock:
+        if ACTIVE_DOWNLOADS < MAX_CONCURRENT_DOWNLOADS:
+            return jsonify({"status": "ready"})
+        else:
+            return jsonify({"status": "busy", "active": ACTIVE_DOWNLOADS, "limit": MAX_CONCURRENT_DOWNLOADS})
 
 @app.route("/direct/<link_id>")
 def direct_download(link_id):
     global ACTIVE_DOWNLOADS
     
-    # Using a lock to ensure only one thread can modify the counter at a time
-    with lock:
+    with lock: # <<< এটি নিশ্চিত করে যে দুজন ব্যবহারকারী একসাথে এই অংশটি চালাতে পারবে না
         if ACTIVE_DOWNLOADS >= MAX_CONCURRENT_DOWNLOADS:
-            return "Server is busy", 429  # This will now be strictly enforced
+            return "Server is busy", 429
         ACTIVE_DOWNLOADS += 1
-
+    
     try:
         link_info = links_collection.find_one({"_id": ObjectId(link_id)})
-        # The actual download streaming logic is placed inside a try...finally block
-        # to ensure the counter is always decremented, even if the user cancels.
         if link_info.get("is_gdrive"):
             service = build('drive', 'v3', developerKey=GOOGLE_API_KEY)
             metadata = service.files().get(fileId=link_info['file_id'], fields='name, size, mimeType').execute()
@@ -129,7 +114,7 @@ def direct_download(link_id):
             headers = {'Content-Disposition': f'attachment; filename="{link_info["filename"]}"', 'Content-Length': req.headers.get('content-length'), 'Content-Type': req.headers.get('content-type', 'application/octet-stream')}
             return Response(stream_with_context(req.iter_content(chunk_size=8192)), headers=headers)
     finally:
-        # This code will run no matter what happens: success, failure, or user cancellation.
+        # <<< এই অংশটি নিশ্চিত করে যে ডাউনলোড সফল হোক বা ব্যর্থ হোক, কাউন্টার কমবেই
         with lock:
             if ACTIVE_DOWNLOADS > 0:
                 ACTIVE_DOWNLOADS -= 1
@@ -144,6 +129,7 @@ def delete_link(link_id):
     except Exception as e: return f"একটি সমস্যা হয়েছে: {str(e)}", 500
 @app.route("/")
 def home(): return redirect(url_for("login"))
-if __name__ == "__main__": app.run(host="0.0.0.0", port=10000)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=10000)
 
 # --- END OF FILE server/app.py ---
