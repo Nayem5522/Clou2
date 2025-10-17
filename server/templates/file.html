@@ -1,27 +1,86 @@
 <!-- START OF FILE server/templates/file.html -->
-
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
     <title>{{ link_info.filename }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { text-align:center; font-family:sans-serif; background:#f4f4f4; padding:50px; }
-        .box { background:white; padding:30px; border-radius:10px; display:inline-block; box-shadow:0 0 10px rgba(0,0,0,0.1); }
-        .download-btn { background:#28a745; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer; font-size: 16px; text-decoration: none; }
-        .download-btn:hover { background:#218838; }
+        body { text-align:center; font-family:sans-serif; background:#f4f4f4; padding: 20px; }
+        .ad-container { margin: 20px auto; max-width: 728px; }
+        .box { background:white; padding:30px; border-radius:10px; display:inline-block; box-shadow:0 0 10px rgba(0,0,0,0.1); margin: 20px auto; }
         h3 { word-break: break-all; }
+        .download-btn { background:#28a745; color:white; border:none; padding:15px 30px; border-radius:5px; cursor:pointer; font-size: 18px; text-decoration: none; font-weight: bold; }
+        .download-btn:hover { background:#218838; }
+        
+        #timer-ui { padding: 20px; }
+        #timer-countdown { font-size: 24px; font-weight: bold; color: #dc3545; }
+        #success-message { display: none; padding: 15px; background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; border-radius: 5px; font-weight: bold; }
+        #download-button-container { display: none; margin-top: 20px; }
     </style>
 </head>
 <body>
+
+    
+
     <div class="box">
-        <!-- এখানে আপনার দেওয়া কাস্টম নামটিই দেখানো হবে -->
         <h3>📦 {{ link_info.filename }}</h3>
         <p>Size: {{ format_size(link_info.size) }}</p>
-        
-        <!-- <<< মূল পরিবর্তনটি এখানে >>> -->
-        <!-- আমরা 'download' অ্যাট্রিবিউট যোগ করেছি, যার ভ্যালু হলো আপনার কাস্টম ফাইলের নাম -->
-        <a href="/direct/{{ link_id }}" class="download-btn" download="{{ link_info.filename }}">⬇️ Download</a>
+
+        <!-- Header Ad Slot -->
+    <div class="ad-container" id="header-ad">
+        {{ ads.header_ad|safe }}
     </div>
+
+        <!-- Details Ad Slot -->
+        <div class="ad-container" id="details-ad">
+            {{ ads.details_ad|safe }}
+        </div>
+
+        <!-- Timer UI -->
+        <div id="timer-ui">
+            <p>Your download link will be ready in:</p>
+            <div id="timer-countdown">5</div>
+        </div>
+
+        <!-- Success Message -->
+        <div id="success-message">
+            Your download link is generated! Please scroll down and click the download button.
+        </div>
+
+        <!-- Footer Ad Slot -->
+    <div class="ad-container" id="footer-ad">
+        {{ ads.footer_ad|safe }}
+    </div>
+
+        <!-- Download Button (Initially Hidden) -->
+        <div id="download-button-container">
+            <a href="/direct/{{ link_id }}" class="download-btn" download="{{ link_info.filename }}">⬇️ Download Now</a>
+        </div>
+    </div>
+
+
+    <script>
+        window.onload = function() {
+            let timer = 5;
+            const countdownElement = document.getElementById('timer-countdown');
+            const timerUi = document.getElementById('timer-ui');
+            const successMessage = document.getElementById('success-message');
+            const downloadButtonContainer = document.getElementById('download-button-container');
+
+            const interval = setInterval(() => {
+                timer--;
+                countdownElement.textContent = timer;
+
+                if (timer <= 0) {
+                    clearInterval(interval);
+                    timerUi.style.display = 'none';
+                    successMessage.style.display = 'block';
+                    downloadButtonContainer.style.display = 'block';
+                }
+            }, 1000);
+        };
+    </script>
 </body>
 </html>
 <!-- END OF FILE server/templates/file.html -->
