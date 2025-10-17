@@ -1,14 +1,12 @@
-# --- START OF FILE server/app.py ---
+# --- START OF FILE server.app.py ---
 
-from flask import Flask, request, render_template, redirect, url_for, session, jsonify, Response, stream_with_context
+from flask import Flask, request, render_template, redirect, url_for, session, jsonify
 from pymongo import MongoClient
 from functools import wraps
 from dotenv import load_dotenv
-import os, datetime, math, requests, re, io
+import os, datetime, math, requests, re
 from bson.objectid import ObjectId
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseDownload
-from threading import Lock  # <<< এটিই মূল চালিকাশক্তি
 
 load_dotenv()
 app = Flask(__name__)
@@ -18,11 +16,6 @@ client = MongoClient(os.getenv("MONGO_URI"))
 db = client["r2s_bot"]
 links_collection = db["links"]
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-
-# --- FINAL AND ROBUST QUEUE SYSTEM ---
-ACTIVE_DOWNLOADS = 0
-MAX_CONCURRENT_DOWNLOADS = 1  # কঠোরভাবে ১টি ডাউনলোড
-lock = Lock()  # রেস কন্ডিশন প্রতিরোধের জন্য লক
 
 def extract_google_drive_file_id(url):
     pattern = r"drive\.google\.com/(?:file/d/|open\?id=)([a-zA-Z0-9_-]+)"; match = re.search(pattern, url); return match.group(1) if match else None
@@ -51,8 +44,16 @@ def logout(): session.pop("logged_in", None); return redirect(url_for("login"))
 @app.route("/dashboard")
 @login_required
 def dashboard(): all_links = list(links_collection.find().sort("added_at", -1)); return render_template("dashboard.html", links=all_links)
+@app.route("/")
+def home(): return redirect(url_for("login"))
+@app.route("/delete/<link_id>", methods=["POST"])
+@login_required
+def delete_link(link_id):
+    links_collection.delete_one({"_id": ObjectId(link_id)}); return redirect(url_for("dashboard"))
+
 @app.route("/api/add_link", methods=["POST"])
 def api_add_link():
+    # ... (No changes here, this part is correct) ...
     try:
         data = request.get_json(); url = data.get("url"); filename = data.get("filename")
         file_id = extract_google_drive_file_id(url); is_gdrive = bool(file_id)
@@ -73,63 +74,45 @@ def download_page(link_id):
     try:
         link_info = links_collection.find_one({"_id": ObjectId(link_id)})
         if not link_info: return "❌ লিঙ্কটি খুঁজে পাওয়া যায়নি।", 404
-        # ... (Size fetching logic is fine) ...
-        return render_template("file.html", link_info=link_info, link_id=link_id, limit=MAX_CONCURRENT_DOWNLOADS)
+        
+        # <<< ROBUST SIZE FETCHING >>>
+        file_size = None
+        try:
+            if link_info.get("is_gdrive"):
+                if GOOGLE_API_KEY:
+                    service = build('drive', 'v3', developerKey=GOOGLE_API_KEY)
+                    file_size = int(service.files().get(fileId=link_info['file_id'], fields='size').execute().get('size', 0))
+            else:
+                with requests.head(link_info['original_url'], allow_redirects=True, timeout=5) as h:
+                    if h.status_code == 200 and 'content-length' in h.headers:
+                        file_size = int(h.headers['content-length'])
+        except Exception:
+            pass # It's okay if size cannot be determined
+        
+        link_info['size'] = file_size
+        return render_template("file.html", link_info=link_info, link_id=link_id)
     except Exception: return "❌ অবৈধ লিঙ্ক আইডি।", 404
 
-@app.route("/api/status")
-def api_status():
-    global ACTIVE_DOWNLOADS
-    # The lock is not strictly needed here but good for consistency
-    with lock:
-        if ACTIVE_DOWNLOADS < MAX_CONCURRENT_DOWNLOADS:
-            return jsonify({"status": "ready"})
-        else:
-            return jsonify({"status": "busy", "active": ACTIVE_DOWNLOADS, "limit": MAX_CONCURRENT_DOWNLOADS})
-
+# <<< THE FINAL, SIMPLIFIED, AND RELIABLE DOWNLOAD ROUTE >>>
 @app.route("/direct/<link_id>")
 def direct_download(link_id):
-    global ACTIVE_DOWNLOADS
-    
-    with lock: # <<< এটি নিশ্চিত করে যে দুজন ব্যবহারকারী একসাথে এই অংশটি চালাতে পারবে না
-        if ACTIVE_DOWNLOADS >= MAX_CONCURRENT_DOWNLOADS:
-            return "Server is busy", 429
-        ACTIVE_DOWNLOADS += 1
-    
     try:
         link_info = links_collection.find_one({"_id": ObjectId(link_id)})
+        if not link_info: return "Link not found", 404
+        
         if link_info.get("is_gdrive"):
-            service = build('drive', 'v3', developerKey=GOOGLE_API_KEY)
-            metadata = service.files().get(fileId=link_info['file_id'], fields='name, size, mimeType').execute()
-            filename, filesize, mimetype = metadata.get('name'), metadata.get('size'), metadata.get('mimeType')
-            req = service.files().get_media(fileId=link_info['file_id']); fh = io.BytesIO(); downloader = MediaIoBaseDownload(fh, req)
-            def generate():
-                done = False
-                while not done: status, done = downloader.next_chunk(); fh.seek(0); yield fh.read(); fh.seek(0); fh.truncate()
-            headers = {'Content-Disposition': f'attachment; filename="{filename}"', 'Content-Length': filesize, 'Content-Type': mimetype}
-            return Response(stream_with_context(generate()), headers=headers)
+            # For Google Drive, we construct the direct download link that forces download
+            file_id = link_info['file_id']
+            final_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+            return redirect(final_url)
         else:
-            req = requests.get(link_info['original_url'], stream=True, allow_redirects=True, timeout=30)
-            if req.status_code != 200: raise ConnectionError(f"Source server returned {req.status_code}")
-            headers = {'Content-Disposition': f'attachment; filename="{link_info["filename"]}"', 'Content-Length': req.headers.get('content-length'), 'Content-Type': req.headers.get('content-type', 'application/octet-stream')}
-            return Response(stream_with_context(req.iter_content(chunk_size=8192)), headers=headers)
-    finally:
-        # <<< এই অংশটি নিশ্চিত করে যে ডাউনলোড সফল হোক বা ব্যর্থ হোক, কাউন্টার কমবেই
-        with lock:
-            if ACTIVE_DOWNLOADS > 0:
-                ACTIVE_DOWNLOADS -= 1
+            # For other links, we just redirect to the original URL
+            return redirect(link_info['original_url'])
+            
+    except Exception as e:
+        return f"An error occurred: {e}", 500
 
-# ... (Delete and home routes remain unchanged) ...
-@app.route("/delete/<link_id>", methods=["POST"])
-@login_required
-def delete_link(link_id):
-    try:
-        if links_collection.delete_one({"_id": ObjectId(link_id)}).deleted_count == 1: return redirect(url_for("dashboard"))
-        else: return "লিঙ্কটি খুঁজে পাওয়া যায়নি।", 404
-    except Exception as e: return f"একটি সমস্যা হয়েছে: {str(e)}", 500
-@app.route("/")
-def home(): return redirect(url_for("login"))
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
 
-# --- END OF FILE server/app.py ---
+# --- END OF FILE server.app.py ---
