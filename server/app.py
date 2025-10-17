@@ -1,6 +1,6 @@
-# --- START OF FILE server.app.py ---
+# --- START OF FILE server/app.py ---
 
-from flask import Flask, request, render_template, redirect, url_for, session, jsonify
+from flask import Flask, request, render_template, redirect, url_for, session, jsonify, Response
 from pymongo import MongoClient
 from functools import wraps
 from dotenv import load_dotenv
@@ -15,10 +15,10 @@ app.secret_key = os.getenv("SECRET_KEY", "super_secret_key")
 client = MongoClient(os.getenv("MONGO_URI"))
 db = client["r2s_bot"]
 links_collection = db["links"]
-settings_collection = db["settings"] # <<< বিজ্ঞাপন কোড সেভ করার জন্য নতুন কালেকশন
+settings_collection = db["settings"]
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
-# ... (Helper functions remain the same) ...
+
 def extract_google_drive_file_id(url):
     pattern = r"drive\.google\.com/(?:file/d/|open\?id=)([a-zA-Z0-9_-]+)"; match = re.search(pattern, url); return match.group(1) if match else None
 def format_size(size_bytes):
@@ -26,8 +26,6 @@ def format_size(size_bytes):
     size_name = ("B", "KB", "MB", "GB", "TB"); i = int(math.floor(math.log(size_bytes, 1024))); p = math.pow(1024, i); s = round(size_bytes / p, 2); return f"{s} {size_name[i]}"
 @app.context_processor
 def utility_processor(): return dict(format_size=format_size)
-
-# ... (Auth routes remain the same) ...
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -45,32 +43,20 @@ def login():
 def logout(): session.pop("logged_in", None); return redirect(url_for("login"))
 @app.route("/")
 def home(): return redirect(url_for("login"))
-
 @app.route("/dashboard")
 @login_required
 def dashboard(): all_links = list(links_collection.find().sort("added_at", -1)); return render_template("dashboard.html", links=all_links)
-
-# <<< NEW ROUTE FOR MANAGING ADS >>>
 @app.route("/admin/ads", methods=["GET", "POST"])
 @login_required
 def manage_ads():
     if request.method == "POST":
-        ads_doc = {
-            "header_ad": request.form.get("header_ad"),
-            "details_ad": request.form.get("details_ad"),
-            "footer_ad": request.form.get("footer_ad")
-        }
-        # Update existing ad settings or insert a new one if it doesn't exist
+        ads_doc = {"header_ad": request.form.get("header_ad"),"details_ad": request.form.get("details_ad"),"footer_ad": request.form.get("footer_ad")}
         settings_collection.update_one({}, {"$set": ads_doc}, upsert=True)
         return redirect(url_for("manage_ads"))
-    
-    # Fetch existing ad codes to display in the form
     current_ads = settings_collection.find_one() or {}
     return render_template("ads.html", ads=current_ads)
-
 @app.route("/api/add_link", methods=["POST"])
 def api_add_link():
-    # ... (No changes here) ...
     try:
         data = request.get_json(); url = data.get("url"); filename = data.get("filename")
         file_id = extract_google_drive_file_id(url); is_gdrive = bool(file_id)
@@ -85,17 +71,13 @@ def api_add_link():
         links_collection.insert_one(link_doc)
         return jsonify({"status": "success", "link": {"_id": str(link_doc['_id']), "filename": filename}})
     except Exception as e: return jsonify({"status": "error", "message": str(e)}), 500
-
 @app.route("/download/<link_id>")
 def download_page(link_id):
     try:
         link_info = links_collection.find_one({"_id": ObjectId(link_id)})
         if not link_info: return "❌ লিঙ্কটি খুঁজে পাওয়া যায়নি।", 404
-        
-        # <<< FETCH ADS TO DISPLAY ON THE PAGE >>>
         ads = settings_collection.find_one() or {}
-        
-        file_size = None # Size fetching logic is the same
+        file_size = None
         try:
             if link_info.get("is_gdrive"):
                 if GOOGLE_API_KEY: service = build('drive', 'v3', developerKey=GOOGLE_API_KEY); file_size = int(service.files().get(fileId=link_info['file_id'], fields='size').execute().get('size', 0))
@@ -104,25 +86,43 @@ def download_page(link_id):
                     if h.status_code == 200 and 'content-length' in h.headers: file_size = int(h.headers['content-length'])
         except Exception: pass
         link_info['size'] = file_size
-        
         return render_template("file.html", link_info=link_info, link_id=link_id, ads=ads)
     except Exception: return "❌ অবৈধ লিঙ্ক আইডি।", 404
-
-# ... (Redirect and Delete routes remain the same) ...
-@app.route("/direct/<link_id>")
-def direct_download(link_id):
-    try:
-        link_info = links_collection.find_one({"_id": ObjectId(link_id)});
-        if not link_info: return "Link not found", 404
-        if link_info.get("is_gdrive"): return redirect(f"https://drive.google.com/uc?export=download&id={link_info['file_id']}")
-        else: return redirect(link_info['original_url'])
-    except Exception as e: return f"An error occurred: {e}", 500
 @app.route("/delete/<link_id>", methods=["POST"])
 @login_required
 def delete_link(link_id):
     links_collection.delete_one({"_id": ObjectId(link_id)}); return redirect(url_for("dashboard"))
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+@app.route("/direct/<link_id>")
+def direct_download(link_id):
+    try:
+        link_info = links_collection.find_one({"_id": ObjectId(link_id)})
+        if not link_info: return "Link not found", 404
+        
+        base_filename = link_info.get("filename", "downloaded_file")
+        
+        final_filename = f"PmwBD.top {base_filename}"
+        
+        if link_info.get("is_gdrive"):
+            final_url = f"https://drive.google.com/uc?export=download&id={link_info['file_id']}"
+        else:
+            final_url = link_info['original_url']
+            
+        req = requests.get(final_url, stream=True)
+        req.raise_for_status()
 
-# --- END OF FILE server.app.py ---
+        headers = {
+            
+            "Content-Disposition": f'attachment; filename="{final_filename}"',
+            "Content-Type": req.headers.get('Content-Type', 'application/octet-stream'),
+            "Content-Length": req.headers.get('Content-Length'),
+        }
+
+        return Response(req.iter_content(chunk_size=8192), headers=headers)
+            
+    except Exception as e:
+        return f"An error occurred: {e}", 500
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.f", port=10000)
+    
