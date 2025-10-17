@@ -1,6 +1,6 @@
 # --- START OF FILE server/app.py ---
 
-from flask import Flask, request, render_template, redirect, url_for, session, jsonify, Response
+from flask import Flask, request, render_template, redirect, url_for, session, jsonify
 from pymongo import MongoClient
 from functools import wraps
 from dotenv import load_dotenv
@@ -18,7 +18,6 @@ links_collection = db["links"]
 settings_collection = db["settings"]
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
-# ... (Helper and Auth functions remain the same) ...
 def extract_google_drive_file_id(url):
     pattern = r"drive\.google\.com/(?:file/d/|open\?id=)([a-zA-Z0-9_-]+)"; match = re.search(pattern, url); return match.group(1) if match else None
 def format_size(size_bytes):
@@ -26,6 +25,8 @@ def format_size(size_bytes):
     size_name = ("B", "KB", "MB", "GB", "TB"); i = int(math.floor(math.log(size_bytes, 1024))); p = math.pow(1024, i); s = round(size_bytes / p, 2); return f"{s} {size_name[i]}"
 @app.context_processor
 def utility_processor(): return dict(format_size=format_size)
+
+# ... (Auth and other simple routes remain the same) ...
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -93,61 +94,26 @@ def download_page(link_id):
 def delete_link(link_id):
     links_collection.delete_one({"_id": ObjectId(link_id)}); return redirect(url_for("dashboard"))
 
-# <<< FINAL AND RELIABLE /direct ROUTE FOR ALL FILE TYPES >>>
+# <<< THE FINAL, SIMPLIFIED, AND RELIABLE DOWNLOAD ROUTE USING REDIRECT >>>
 @app.route("/direct/<link_id>")
 def direct_download(link_id):
     try:
         link_info = links_collection.find_one({"_id": ObjectId(link_id)})
         if not link_info: return "Link not found", 404
         
-        base_filename = link_info.get("filename", "downloaded_file")
-        final_filename = f"PmwBD.top {base_filename}"
-        
-        # --- GOOGLE DRIVE LOGIC WITH LARGE FILE HANDLING ---
         if link_info.get("is_gdrive"):
+            # For Google Drive, we construct the direct download link that forces download
             file_id = link_info['file_id']
-            download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
-            
-            # A session is needed to handle cookies across requests
-            session = requests.Session()
-            # First request to get the confirmation page
-            res1 = session.get(download_url, stream=True)
-            
-            # Check if we got a confirmation page by looking for the token
-            confirm_token = None
-            for key, value in res1.cookies.items():
-                if key.startswith('download_warning'):
-                    confirm_token = value
-                    break
-
-            if confirm_token:
-                # If token found, make the second request with the token to bypass the warning
-                final_url_with_token = f"{download_url}&confirm={confirm_token}"
-                req = session.get(final_url_with_token, stream=True)
-            else:
-                # If no token, the first response is the file itself (for small files)
-                req = res1
-        
-        # --- DIRECT LINK LOGIC (REMAINS THE SAME) ---
+            final_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+            return redirect(final_url)
         else:
-            final_url = link_info['original_url']
-            req = requests.get(final_url, stream=True)
-
-        req.raise_for_status()
-
-        headers = {
-            "Content-Disposition": f'attachment; filename="{final_filename}"',
-            "Content-Type": req.headers.get('Content-Type', 'application/octet-stream'),
-            "Content-Length": req.headers.get('Content-Length'),
-        }
-
-        return Response(req.iter_content(chunk_size=8192), headers=headers)
+            # For other links, we just redirect to the original URL
+            return redirect(link_info['original_url'])
             
     except Exception as e:
-        # Provide a more descriptive error message
-        return f"An error occurred. The file may be private, deleted, or the download quota has been exceeded. Error: {e}", 500
+        return f"An error occurred: {e}", 500
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.f", port=10000) 
+    app.run(host="0.0.0.0", port=10000)
 
-
+# --- END OF FILE server.app.py ---
