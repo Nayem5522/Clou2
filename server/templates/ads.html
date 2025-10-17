@@ -1,0 +1,38 @@
+<!-- START OF FILE server/templates/ads.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Manage Ads</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: sans-serif; background-color: #f8f9fa; }
+        .container { max-width: 800px; margin: 40px auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h2 { text-align: center; }
+        label { display: block; margin-top: 20px; font-weight: bold; }
+        textarea { width: 98%; height: 150px; padding: 10px; font-size: 14px; border: 1px solid #ccc; border-radius: 5px; }
+        button { display: block; width: 100%; padding: 12px; margin-top: 30px; background-color: #007bff; color: white; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        a { text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/dashboard"><button style="background-color: #6c757d; margin-bottom: 20px;">&larr; Back to Dashboard</button></a>
+        <h2>Manage Advertisement Codes</h2>
+        <form method="POST">
+            <label for="header_ad">Header Ads Code</label>
+            <textarea name="header_ad" placeholder="Paste your ad code for the header section here...">{{ ads.header_ad }}</textarea>
+
+            <label for="details_ad">Details Ads Code (Between title and button)</label>
+            <textarea name="details_ad" placeholder="Paste your ad code for the details section here...">{{ ads.details_ad }}</textarea>
+
+            <label for="footer_ad">Footer Ads Code</label>
+            <textarea name="footer_ad" placeholder="Paste your ad code for the footer section here...">{{ ads.footer_ad }}</textarea>
+
+            <button type="submit">Save Ads</button>
+        </form>
+    </div>
+</body>
+</html>
+<!-- END OF FILE server/templates/ads.html -->
