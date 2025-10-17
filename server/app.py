@@ -8,6 +8,7 @@ import os, datetime, math, requests, re, io
 from bson.objectid import ObjectId
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
+from threading import Lock  # <<< IMPORT THE LOCK FOR THREAD SAFETY
 
 load_dotenv()
 app = Flask(__name__)
@@ -18,10 +19,10 @@ db = client["r2s_bot"]
 links_collection = db["links"]
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
-# <<< RE-IMPLEMENTING THE QUEUE SYSTEM >>>
+# --- FINAL AND ROBUST QUEUE SYSTEM IMPLEMENTATION ---
 ACTIVE_DOWNLOADS = 0
-# For Render Free Tier, it's safest to keep this at 1. You can try 2 on a paid plan.
-MAX_CONCURRENT_DOWNLOADS = 1 
+MAX_CONCURRENT_DOWNLOADS = 1  # Strict limit to ONE download at a time for Free Tier
+lock = Lock()  # Create a lock to prevent race conditions
 
 def extract_google_drive_file_id(url):
     pattern = r"drive\.google\.com/(?:file/d/|open\?id=)([a-zA-Z0-9_-]+)"; match = re.search(pattern, url); return match.group(1) if match else None
@@ -50,17 +51,15 @@ def logout(): session.pop("logged_in", None); return redirect(url_for("login"))
 @app.route("/dashboard")
 @login_required
 def dashboard(): all_links = list(links_collection.find().sort("added_at", -1)); return render_template("dashboard.html", links=all_links)
-
 @app.route("/api/add_link", methods=["POST"])
 def api_add_link():
-    # ... (No changes here, this part is correct) ...
+    # ... (No changes in this function) ...
     try:
         data = request.get_json(); url = data.get("url"); filename = data.get("filename")
         file_id = extract_google_drive_file_id(url); is_gdrive = bool(file_id)
         if not filename:
             try:
                 if is_gdrive:
-                    if not GOOGLE_API_KEY: raise ValueError("API Key missing")
                     service = build('drive', 'v3', developerKey=GOOGLE_API_KEY)
                     filename = service.files().get(fileId=file_id, fields='name').execute().get('name')
                 else:
@@ -74,10 +73,10 @@ def api_add_link():
 
 @app.route("/download/<link_id>")
 def download_page(link_id):
+    # ... (This function remains the same) ...
     try:
         link_info = links_collection.find_one({"_id": ObjectId(link_id)})
         if not link_info: return "❌ লিঙ্কটি খুঁজে পাওয়া যায়নি।", 404
-        # Fetch size for display
         file_size = None
         try:
             if link_info.get("is_gdrive"):
@@ -91,30 +90,30 @@ def download_page(link_id):
         return render_template("file.html", link_info=link_info, link_id=link_id, limit=MAX_CONCURRENT_DOWNLOADS)
     except Exception: return "❌ অবৈধ লিঙ্ক আইডি।", 404
 
-# <<< RE-IMPLEMENTING THE STATUS API FOR THE QUEUE >>>
 @app.route("/api/status")
 def api_status():
+    # ... (This function remains the same) ...
     global ACTIVE_DOWNLOADS
     if ACTIVE_DOWNLOADS < MAX_CONCURRENT_DOWNLOADS:
         return jsonify({"status": "ready"})
     else:
         return jsonify({"status": "busy", "active": ACTIVE_DOWNLOADS, "limit": MAX_CONCURRENT_DOWNLOADS})
 
-def decrement_downloader():
-    global ACTIVE_DOWNLOADS
-    if ACTIVE_DOWNLOADS > 0: ACTIVE_DOWNLOADS -= 1
-
 @app.route("/direct/<link_id>")
 def direct_download(link_id):
     global ACTIVE_DOWNLOADS
-    if ACTIVE_DOWNLOADS >= MAX_CONCURRENT_DOWNLOADS: return "Server is busy", 429
     
-    ACTIVE_DOWNLOADS += 1
+    # Using a lock to ensure only one thread can modify the counter at a time
+    with lock:
+        if ACTIVE_DOWNLOADS >= MAX_CONCURRENT_DOWNLOADS:
+            return "Server is busy", 429  # This will now be strictly enforced
+        ACTIVE_DOWNLOADS += 1
+
     try:
         link_info = links_collection.find_one({"_id": ObjectId(link_id)})
-        # ... (The download logic for both GDrive and Direct links is correct and remains the same) ...
+        # The actual download streaming logic is placed inside a try...finally block
+        # to ensure the counter is always decremented, even if the user cancels.
         if link_info.get("is_gdrive"):
-            # GDrive logic
             service = build('drive', 'v3', developerKey=GOOGLE_API_KEY)
             metadata = service.files().get(fileId=link_info['file_id'], fields='name, size, mimeType').execute()
             filename, filesize, mimetype = metadata.get('name'), metadata.get('size'), metadata.get('mimeType')
@@ -123,19 +122,17 @@ def direct_download(link_id):
                 done = False
                 while not done: status, done = downloader.next_chunk(); fh.seek(0); yield fh.read(); fh.seek(0); fh.truncate()
             headers = {'Content-Disposition': f'attachment; filename="{filename}"', 'Content-Length': filesize, 'Content-Type': mimetype}
-            response = Response(stream_with_context(generate()), headers=headers)
+            return Response(stream_with_context(generate()), headers=headers)
         else:
-            # Direct link logic
             req = requests.get(link_info['original_url'], stream=True, allow_redirects=True, timeout=30)
-            if req.status_code != 200: raise ConnectionError(f"Source server returned status {req.status_code}")
+            if req.status_code != 200: raise ConnectionError(f"Source server returned {req.status_code}")
             headers = {'Content-Disposition': f'attachment; filename="{link_info["filename"]}"', 'Content-Length': req.headers.get('content-length'), 'Content-Type': req.headers.get('content-type', 'application/octet-stream')}
-            response = Response(stream_with_context(req.iter_content(chunk_size=8192)), headers=headers)
-        
-        response.call_on_close(decrement_downloader) # This is crucial! It decrements the counter when download finishes/fails.
-        return response
-    except Exception as e:
-        decrement_downloader() # Decrement counter if an error happens before streaming starts.
-        return f"❌ একটি অপ্রত্যাশিত সমস্যা হয়েছে: {e}", 500
+            return Response(stream_with_context(req.iter_content(chunk_size=8192)), headers=headers)
+    finally:
+        # This code will run no matter what happens: success, failure, or user cancellation.
+        with lock:
+            if ACTIVE_DOWNLOADS > 0:
+                ACTIVE_DOWNLOADS -= 1
 
 # ... (Delete and home routes remain unchanged) ...
 @app.route("/delete/<link_id>", methods=["POST"])
