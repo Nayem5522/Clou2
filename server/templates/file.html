@@ -34,12 +34,13 @@
         
         <div id="button-container">
             {% if link_info.get("is_gdrive") %}
-                <!-- <<< মূল পরিবর্তন: target="_blank" যোগ করা হয়েছে >>> -->
+                <!-- Watch button links to the original preview page -->
                 <a href="{{ link_info.original_url }}" target="_blank" class="action-btn watch-btn">📺 Watch Online</a>
-                <a href="/direct/{{ link_id }}" target="_blank" class="action-btn download-btn">⬇️ Download Now</a>
+                <!-- Download button now has the FINAL direct link -->
+                <a href="{{ final_download_link }}" target="_blank" class="action-btn download-btn">⬇️ Download Now</a>
             {% else %}
-                <!-- <<< মূল পরিবর্তন: target="_blank" যোগ করা হয়েছে >>> -->
-                <a href="/direct/{{ link_id }}" target="_blank" class="action-btn download-btn">⬇️ Download Now</a>
+                <!-- Download button for other links -->
+                <a href="{{ final_download_link }}" target="_blank" class="action-btn download-btn">⬇️ Download Now</a>
             {% endif %}
         </div>
     </div>
