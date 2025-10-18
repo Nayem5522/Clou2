@@ -6,44 +6,140 @@
     <title>{{ link_info.filename }}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { text-align:center; font-family:sans-serif; background:#f4f4f4; padding: 20px; }
-        .ad-container { margin: 20px auto; max-width: 728px; }
-        .box { background:white; padding:30px; border-radius:10px; display:inline-block; box-shadow:0 0 10px rgba(0,0,0,0.1); margin: 20px auto; }
-        h3 { word-break: break-all; }
-        .action-btn { border:none; padding:15px 30px; border-radius:5px; cursor:pointer; font-size: 18px; text-decoration: none; font-weight: bold; color: white; margin: 0 10px; }
-        .download-btn { background:#28a745; } .download-btn:hover { background:#218838; }
-        .watch-btn { background:#007bff; } .watch-btn:hover { background:#0056b3; }
-        
-        #timer-ui { padding: 20px; }
-        #timer-countdown { font-size: 24px; font-weight: bold; color: #dc3545; }
-        #success-message { display: none; padding: 15px; background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; border-radius: 5px; font-weight: bold; }
-        #button-container { display: none; margin-top: 20px; }
+        body {
+            text-align: center;
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #e0f7fa, #e3f2fd);
+            padding: 30px;
+            margin: 0;
+        }
+
+        a { text-decoration: none; }
+
+        .hero {
+            margin-bottom: 20px;
+            animation: fadeIn 1.2s ease-in-out;
+        }
+        .hero img {
+            width: 100%;
+            max-width: 700px;
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+        .hero img:hover {
+            transform: scale(1.03);
+        }
+
+        .box {
+            background: #ffffff;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            display: inline-block;
+            animation: slideUp 0.8s ease;
+            max-width: 500px;
+            width: 100%;
+        }
+
+        h3 {
+            font-size: 22px;
+            color: #333;
+            word-break: break-all;
+        }
+
+        p {
+            color: #555;
+            font-size: 16px;
+            margin: 10px 0 20px 0;
+        }
+
+        .action-btn {
+            border: none;
+            padding: 15px 35px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: bold;
+            color: #fff;
+            background: linear-gradient(135deg, #28a745, #2ecc71);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+        }
+        .action-btn:hover {
+            background: linear-gradient(135deg, #218838, #27ae60);
+            transform: translateY(-2px);
+        }
+
+        #timer-ui {
+            padding: 20px;
+            background: #f1f8e9;
+            border-radius: 10px;
+            margin-bottom: 15px;
+        }
+        #timer-countdown {
+            font-size: 28px;
+            font-weight: bold;
+            color: #d32f2f;
+        }
+        #success-message {
+            display: none;
+            padding: 15px;
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            border-radius: 8px;
+            font-weight: bold;
+        }
+        #button-container {
+            display: none;
+            margin-top: 25px;
+        }
+
+        .ad-container {
+            margin: 20px auto;
+            max-width: 728px;
+        }
+
+        @keyframes fadeIn {
+            from {opacity: 0;}
+            to {opacity: 1;}
+        }
+        @keyframes slideUp {
+            from {transform: translateY(20px); opacity: 0;}
+            to {transform: translateY(0); opacity: 1;}
+        }
     </style>
 </head>
 <body>
+    <!-- Clickable banner -->
+    <div class="hero">
+        <a href="https://pmwbd.vercel.app" target="_blank">
+            <img src="https://i.postimg.cc/3RPyjtvc/IMG-20250817-043812-084.jpg" alt="Banner">
+        </a>
+    </div>
+
     <div class="ad-container" id="header-ad">{{ ads.header_ad|safe }}</div>
+
     <div class="box">
         <h3>📦 {{ link_info.filename }}</h3>
         <p>Size: {{ format_size(link_info.size) }}</p>
+
         <div class="ad-container" id="details-ad">{{ ads.details_ad|safe }}</div>
+
         <div id="timer-ui">
-            <p>Your link will be ready in:</p>
+            <p>⏳ Your link will be ready in:</p>
             <div id="timer-countdown">5</div>
         </div>
-        <div id="success-message">Your link is generated!</div>
-        
+
+        <div id="success-message">✅ Your link is ready!</div>
+
         <div id="button-container">
-            {% if link_info.get("is_gdrive") %}
-                <!-- Watch button links to the original preview page -->
-                <a href="{{ link_info.original_url }}" target="_blank" class="action-btn watch-btn">📺 Watch Online</a>
-                <!-- Download button now has the FINAL direct link -->
-                <a href="{{ final_download_link }}" target="_blank" class="action-btn download-btn">⬇️ Download Now</a>
-            {% else %}
-                <!-- Download button for other links -->
-                <a href="{{ final_download_link }}" target="_blank" class="action-btn download-btn">⬇️ Download Now</a>
-            {% endif %}
+            <a href="{{ final_download_link }}" target="_blank" class="action-btn">⬇️ Get Link Now</a>
         </div>
     </div>
+
     <div class="ad-container" id="footer-ad">{{ ads.footer_ad|safe }}</div>
 
     <script>
