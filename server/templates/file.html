@@ -32,15 +32,15 @@
         </div>
         <div id="success-message">Your link is generated!</div>
         
-        <!-- <<< মূল পরিবর্তন: বাটনগুলো এখন এখানে >>> -->
         <div id="button-container">
             {% if link_info.get("is_gdrive") %}
-                <!-- গুগল ড্রাইভের জন্য দুটি বাটন -->
+                <!-- Watch button links to the original preview page -->
                 <a href="{{ link_info.original_url }}" target="_blank" class="action-btn watch-btn">📺 Watch Online</a>
-                <a href="/direct/{{ link_id }}" class="action-btn download-btn">⬇️ Download Now</a>
+                <!-- Download button now has the FINAL direct link -->
+                <a href="{{ final_download_link }}" class="action-btn download-btn">⬇️ Download Now</a>
             {% else %}
-                <!-- অন্য লিঙ্কের জন্য একটি বাটন -->
-                <a href="/direct/{{ link_id }}" class="action-btn download-btn">⬇️ Download Now</a>
+                <!-- Download button for other links -->
+                <a href="{{ final_download_link }}" class="action-btn download-btn">⬇️ Download Now</a>
             {% endif %}
         </div>
     </div>
