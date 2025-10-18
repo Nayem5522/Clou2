@@ -94,7 +94,7 @@ def download_page(link_id):
 def delete_link(link_id):
     links_collection.delete_one({"_id": ObjectId(link_id)}); return redirect(url_for("dashboard"))
 
-# <<< FINAL DOWNLOAD ROUTE USING GOOGLE DRIVE API FOR RELIABILITY >>>
+# <<< FINAL AND MOST RELIABLE REDIRECT ROUTE >>>
 @app.route("/direct/<link_id>")
 def direct_download(link_id):
     try:
@@ -103,28 +103,17 @@ def direct_download(link_id):
         
         # --- GOOGLE DRIVE LOGIC ---
         if link_info.get("is_gdrive"):
-            if not GOOGLE_API_KEY: return "Error: Google API Key is not configured.", 500
-            
             file_id = link_info['file_id']
-            service = build('drive', 'v3', developerKey=GOOGLE_API_KEY)
-            
-            # Request the webContentLink - this is the most reliable direct download link
-            file_metadata = service.files().get(fileId=file_id, fields='webContentLink').execute()
-            direct_link = file_metadata.get('webContentLink')
-            
-            if direct_link:
-                # Redirect the user to the official, direct download link from Google
-                return redirect(direct_link)
-            else:
-                # This happens if the file is private or not downloadable
-                return "Could not get a direct download link. The file might be private.", 403
+            # We use the simplest and most reliable direct download trigger link
+            final_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+            return redirect(final_url)
         
         # --- OTHER DIRECT LINKS LOGIC ---
         else:
             return redirect(link_info['original_url'])
             
     except Exception as e:
-        return f"An error occurred. The file may be deleted or you may not have permission. Error: {e}", 500
+        return f"An error occurred: {e}", 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
