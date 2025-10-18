@@ -72,46 +72,49 @@ def api_add_link():
         links_collection.insert_one(link_doc)
         return jsonify({"status": "success", "link": {"_id": str(link_doc['_id']), "filename": filename}})
     except Exception as e: return jsonify({"status": "error", "message": str(e)}), 500
-@app.route("/download/<link_id>")
-def download_page(link_id):
-    try:
-        link_info = links_collection.find_one({"_id": ObjectId(link_id)})
-        if not link_info: return "❌ লিঙ্কটি খুঁজে পাওয়া যায়নি।", 404
-        ads = settings_collection.find_one() or {}
-        file_size = None
-        try:
-            if link_info.get("is_gdrive"):
-                if GOOGLE_API_KEY: service = build('drive', 'v3', developerKey=GOOGLE_API_KEY); file_size = int(service.files().get(fileId=link_info['file_id'], fields='size').execute().get('size', 0))
-            else:
-                with requests.head(link_info['original_url'], allow_redirects=True, timeout=5) as h:
-                    if h.status_code == 200 and 'content-length' in h.headers: file_size = int(h.headers['content-length'])
-        except Exception: pass
-        link_info['size'] = file_size
-        return render_template("file.html", link_info=link_info, link_id=link_id, ads=ads)
-    except Exception: return "❌ অবৈধ লিঙ্ক আইডি।", 404
 @app.route("/delete/<link_id>", methods=["POST"])
 @login_required
 def delete_link(link_id):
     links_collection.delete_one({"_id": ObjectId(link_id)}); return redirect(url_for("dashboard"))
 
-# <<< এই রুটটি এখন সঠিকভাবে উপস্থিত আছে এবং কাজ করবে >>>
-@app.route("/direct/<link_id>")
-def direct_download(link_id):
+# <<< THE FINAL AND MOST RELIABLE DOWNLOAD PAGE ROUTE >>>
+@app.route("/download/<link_id>")
+def download_page(link_id):
     try:
         link_info = links_collection.find_one({"_id": ObjectId(link_id)})
-        if not link_info: return "Link not found", 404
+        if not link_info: return "❌ লিঙ্কটি খুঁজে পাওয়া যায়নি।", 404
         
+        ads = settings_collection.find_one() or {}
+        
+        # --- Prepare the final download link right here ---
         if link_info.get("is_gdrive"):
-            # গুগল ড্রাইভের জন্য আমরা নির্ভরযোগ্য uc?export=download লিঙ্কটি তৈরি করি
             file_id = link_info['file_id']
-            final_url = f"https://drive.google.com/uc?export=download&id={file_id}"
-            return redirect(final_url)
+            final_download_link = f"https://drive.google.com/uc?export=download&id={file_id}"
         else:
-            # অন্য লিঙ্কের জন্য সরাসরি মূল লিঙ্কে পাঠিয়ে দিই
-            return redirect(link_info['original_url'])
-            
+            final_download_link = link_info['original_url']
+
+        # --- Fetch file size for display ---
+        file_size = None
+        try:
+            if link_info.get("is_gdrive") and GOOGLE_API_KEY:
+                service = build('drive', 'v3', developerKey=GOOGLE_API_KEY)
+                file_size = int(service.files().get(fileId=link_info['file_id'], fields='size').execute().get('size', 0))
+            else:
+                with requests.head(link_info['original_url'], allow_redirects=True, timeout=5) as h:
+                    if h.status_code == 200 and 'content-length' in h.headers:
+                        file_size = int(h.headers['content-length'])
+        except Exception:
+            pass
+        
+        link_info['size'] = file_size
+        
+        # --- Pass the final link to the template ---
+        return render_template("file.html", link_info=link_info, ads=ads, final_download_link=final_download_link)
+        
     except Exception as e:
         return f"An error occurred: {e}", 500
+
+# The /direct/<link_id> route is no longer needed and has been removed.
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
