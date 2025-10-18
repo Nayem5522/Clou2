@@ -10,56 +10,41 @@
         .ad-container { margin: 20px auto; max-width: 728px; }
         .box { background:white; padding:30px; border-radius:10px; display:inline-block; box-shadow:0 0 10px rgba(0,0,0,0.1); margin: 20px auto; }
         h3 { word-break: break-all; }
-        .download-btn { background:#28a745; color:white; border:none; padding:15px 30px; border-radius:5px; cursor:pointer; font-size: 18px; text-decoration: none; font-weight: bold; }
-        .download-btn:hover { background:#218838; }
+        .action-btn { border:none; padding:15px 30px; border-radius:5px; cursor:pointer; font-size: 18px; text-decoration: none; font-weight: bold; color: white; margin: 0 10px; }
+        .download-btn { background:#28a745; } .download-btn:hover { background:#218838; }
+        .watch-btn { background:#007bff; } .watch-btn:hover { background:#0056b3; }
         
         #timer-ui { padding: 20px; }
         #timer-countdown { font-size: 24px; font-weight: bold; color: #dc3545; }
         #success-message { display: none; padding: 15px; background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; border-radius: 5px; font-weight: bold; }
-        #download-button-container { display: none; margin-top: 20px; }
+        #button-container { display: none; margin-top: 20px; }
     </style>
 </head>
 <body>
-
-    
-
+    <div class="ad-container" id="header-ad">{{ ads.header_ad|safe }}</div>
     <div class="box">
         <h3>📦 {{ link_info.filename }}</h3>
         <p>Size: {{ format_size(link_info.size) }}</p>
-
-        <!-- Header Ad Slot -->
-    <div class="ad-container" id="header-ad">
-        {{ ads.header_ad|safe }}
-    </div>
-
-        <!-- Details Ad Slot -->
-        <div class="ad-container" id="details-ad">
-            {{ ads.details_ad|safe }}
-        </div>
-
-        <!-- Timer UI -->
+        <div class="ad-container" id="details-ad">{{ ads.details_ad|safe }}</div>
         <div id="timer-ui">
-            <p>Your download link will be ready in:</p>
+            <p>Your link will be ready in:</p>
             <div id="timer-countdown">5</div>
         </div>
-
-        <!-- Success Message -->
-        <div id="success-message">
-            Your download link is generated! Please scroll down and click the download button.
-        </div>
-
-        <!-- Footer Ad Slot -->
-    <div class="ad-container" id="footer-ad">
-        {{ ads.footer_ad|safe }}
-    </div>
-
-        <!-- Download Button (Initially Hidden) -->
-        <div id="download-button-container">
-            <!-- The 'download' attribute is removed -->
-            <a href="/direct/{{ link_id }}" class="download-btn">⬇️ Download Now</a>
+        <div id="success-message">Your link is generated!</div>
+        
+        <!-- <<< মূল পরিবর্তন: বাটনগুলো এখন এখানে >>> -->
+        <div id="button-container">
+            {% if link_info.get("is_gdrive") %}
+                <!-- গুগল ড্রাইভের জন্য দুটি বাটন -->
+                <a href="{{ link_info.original_url }}" target="_blank" class="action-btn watch-btn">📺 Watch Online</a>
+                <a href="/direct/{{ link_id }}" class="action-btn download-btn">⬇️ Download Now</a>
+            {% else %}
+                <!-- অন্য লিঙ্কের জন্য একটি বাটন -->
+                <a href="/direct/{{ link_id }}" class="action-btn download-btn">⬇️ Download Now</a>
+            {% endif %}
         </div>
     </div>
-
+    <div class="ad-container" id="footer-ad">{{ ads.footer_ad|safe }}</div>
 
     <script>
         window.onload = function() {
@@ -67,17 +52,16 @@
             const countdownElement = document.getElementById('timer-countdown');
             const timerUi = document.getElementById('timer-ui');
             const successMessage = document.getElementById('success-message');
-            const downloadButtonContainer = document.getElementById('download-button-container');
+            const buttonContainer = document.getElementById('button-container');
 
             const interval = setInterval(() => {
                 timer--;
                 countdownElement.textContent = timer;
-
                 if (timer <= 0) {
                     clearInterval(interval);
                     timerUi.style.display = 'none';
                     successMessage.style.display = 'block';
-                    downloadButtonContainer.style.display = 'block';
+                    buttonContainer.style.display = 'block';
                 }
             }, 1000);
         };
