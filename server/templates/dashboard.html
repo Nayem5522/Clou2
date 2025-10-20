@@ -1,156 +1,103 @@
-<!-- START OF FILE server/templates/dashboard.html -->
-
 <!DOCTYPE html>
-<html lang="en">
+<html lang="bn">
 <head>
-    <meta charset="UTF-8">
-    <title>Dashboard</title>
-    <!-- Making it mobile-friendly -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="/static/style.css">
-    <style>
-        /* Your existing styles */
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background-color: #f8f9fa; margin: 0; padding: 0; }
-        .container { max-width: 900px; margin: 40px auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        h2, h3 { text-align: center; color: #343a40; }
-        #addLinkForm { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
-        #addLinkForm input { padding: 10px; border-radius: 5px; border: 1px solid #ccc; }
-        #addLinkForm button { padding: 10px; }
-        ul { list-style: none; padding: 0; }
-        li { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #dee2e6; }
-        li:last-child { border-bottom: none; }
-        .file-info { color: #495057; word-break: break-all; margin-bottom: 10px; width: 100%; }
-        .file-actions { width: 100%; text-align: right; }
-        .file-actions form { display: inline; }
-        .file-actions a, .file-actions button { text-decoration: none; padding: 6px 12px; border-radius: 5px; color: white; border: none; cursor: pointer; font-size: 14px; white-space: nowrap; margin-left: 5px; }
-        .view-btn { background-color: #007bff; } .view-btn:hover { background-color: #0069d9; }
-        .direct-btn { background-color: #28a745; } .direct-btn:hover { background-color: #218838; }
-        .original-btn { background-color: #6c757d; } .original-btn:hover { background-color: #5a6268; }
-        .delete-btn { background-color: #dc3545; } .delete-btn:hover { background-color: #c82333; }
-        #formStatus { text-align: center; margin-top: 10px; font-weight: bold; }
-
-        /* --- STYLES FOR THE NEW ADMIN MENU --- */
-        .admin-menu-container { position: sticky; top: 0; background-color: #f8f9fa; z-index: 1000; padding: 10px 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .admin-menu-button { font-size: 24px; font-weight: bold; cursor: pointer; }
-        .admin-menu { display: none; position: absolute; top: 50px; left: 20px; background: white; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); list-style: none; padding: 10px 0; margin: 0; z-index: 999; }
-        .admin-menu li a { display: block; padding: 10px 20px; text-decoration: none; color: #333; }
-        .admin-menu li a:hover { background-color: #f0f0f0; }
-        
-        /* Media query for better mobile view */
-        @media (min-width: 600px) {
-            .file-info { width: auto; margin-bottom: 0; }
-            .file-actions { width: auto; }
-        }
-    </style>
+  <meta charset="utf-8" />
+  <title>Dashboard</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <!-- --- THE NEW ADMIN MENU --- -->
-    <div class="admin-menu-container">
-        <div class="admin-menu-button" onclick="toggleMenu()">☰</div>
-        <ul class="admin-menu" id="adminMenu">
-            <li><a href="/admin/ads">Manage Ads</a></li>
-            <li><a href="/logout">Logout</a></li>
-        </ul>
-    </div>
-    
-    <!-- Your existing container and content -->
-    <div class="container">
+  <div class="container">
+    <div class="card">
+      <div class="header">
         <h2>🔗 Link Dashboard</h2>
-        <form id="addLinkForm">
-            <input type="url" name="url" id="urlInput" placeholder="Enter download URL (Drive or Direct)" required>
-            <input type="text" name="filename" id="filenameInput" placeholder="Enter custom filename (optional)">
-            <button type="submit">Add Link</button>
-        </form>
-        <p id="formStatus"></p>
-        <h3>🗂 Added Links</h3>
-        <ul id="linkList">
-            {% for link in links %}
-            <li id="link-{{ link._id }}">
-                <span class="file-info">{{ link.filename }}</span>
-                <div class="file-actions">
-                    <a href="/download/{{ link._id }}" class="view-btn">View</a>
-                    <a href="/direct/{{ link._id }}" class="direct-btn" target="_blank">Direct</a>
-                    <a href="{{ link.original_url }}" class="original-btn" target="_blank">Original</a>
-                    <form action="/delete/{{ link._id }}" method="POST" onsubmit="return confirm('Are you sure?');">
-                        <button type="submit" class="delete-btn">Delete</button>
-                    </form>
-                </div>
-            </li>
-            {% endfor %}
-        </ul>
-        <!-- Removed the old logout button as it's now in the menu -->
+        <div style="display:flex;gap:8px;align-items:center;">
+          <a class="btn btn-ghost" href="/deleted">🗑 Deleted Links</a>
+          <a class="btn btn-ghost" href="/logout">Logout</a>
+        </div>
+      </div>
+
+      <form id="addLinkForm" class="card" style="margin-bottom:12px;">
+        <label for="urlInput" class="text-muted" style="font-size:13px;margin-bottom:6px;">Enter download URL</label>
+        <input id="urlInput" type="url" name="url" placeholder="https://drive.google.com/..." required>
+        <label for="filenameInput" class="text-muted" style="font-size:13px;margin-top:8px;">Custom filename (optional)</label>
+        <input id="filenameInput" type="text" name="filename" placeholder="example-file.zip">
+        <div style="display:flex; gap:8px; margin-top:10px;">
+          <button type="submit" class="btn btn-primary">Add Link</button>
+          <button type="reset" class="btn btn-ghost">Reset</button>
+        </div>
+        <p id="formStatus" class="status"></p>
+      </form>
+
+      <h3 style="margin:6px 0 12px 0;">🗂 Added Links</h3>
+      <ul id="linkList" class="file-list">
+        {% for link in links %}
+        <li class="file-item" id="link-{{ link._id }}">
+          <div class="file-info">
+            <div style="font-weight:700;">{{ link.filename }}</div>
+            <div class="file-meta">Added: {{ link.added_at }} • {{ link.original_url }}</div>
+          </div>
+
+          <div class="file-actions">
+            <a class="btn btn-ghost" href="/download/{{ link._id }}">View</a>
+            <a class="btn btn-ghost" target="_blank" href="{{ link.original_url }}">Original</a>
+            <form action="/delete/{{ link._id }}" method="POST" style="display:inline;">
+              <button type="submit" class="btn btn-ghost">Delete</button>
+            </form>
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
     </div>
+  </div>
 
-    <script>
-        // --- NEW JAVASCRIPT FOR THE MENU ---
-        function toggleMenu() {
-            const menu = document.getElementById('adminMenu');
-            if (menu.style.display === 'block') {
-                menu.style.display = 'none';
-            } else {
-                menu.style.display = 'block';
-            }
+  <script>
+    document.getElementById('addLinkForm').addEventListener('submit', function(e){
+      e.preventDefault();
+      const urlInput = document.getElementById('urlInput');
+      const filenameInput = document.getElementById('filenameInput');
+      const formStatus = document.getElementById('formStatus');
+
+      const url = urlInput.value.trim();
+      const filename = filenameInput.value.trim();
+
+      if (!url) { formStatus.textContent = 'Please enter a URL.'; formStatus.style.color='red'; return; }
+
+      formStatus.textContent = 'Adding link...';
+      formStatus.style.color = '#333';
+
+      fetch('/api/add_link', {
+        method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({url, filename})
+      })
+      .then(r=>r.json())
+      .then(data=>{
+        if (data.status==='success'){
+          formStatus.innerHTML = `✅ Link for <strong>${data.link.filename}</strong> added successfully!`;
+          formStatus.style.color='green';
+          // prepend new link
+          const linkList = document.getElementById('linkList');
+          const newLink = data.link;
+          const li = document.createElement('li');
+          li.className='file-item'; li.id=`link-${newLink._id}`;
+          li.innerHTML = `
+            <div class="file-info">
+              <div style="font-weight:700;">${newLink.filename}</div>
+              <div class="file-meta">Just now • ${url}</div>
+            </div>
+            <div class="file-actions">
+              <a class="btn btn-ghost" href="/download/${newLink._id}">View</a>
+              <a class="btn btn-ghost" target="_blank" href="${url}">Original</a>
+              <form action="/delete/${newLink._id}" method="POST" style="display:inline;"><button type="submit" class="btn btn-ghost">Delete</button></form>
+            </div>
+          `;
+          linkList.prepend(li);
+          document.getElementById('addLinkForm').reset();
+        } else {
+          formStatus.textContent = `❌ Failed: ${data.message || 'Unknown error'}`; formStatus.style.color='red';
         }
-        
-        // Hide menu if user clicks outside of it
-        document.addEventListener('click', function(event) {
-            const menu = document.getElementById('adminMenu');
-            const button = document.querySelector('.admin-menu-button');
-            if (!menu.contains(event.target) && !button.contains(event.target)) {
-                menu.style.display = 'none';
-            }
-        });
-
-        // Your existing Javascript for adding links
-        const addLinkForm = document.getElementById('addLinkForm');
-        const urlInput = document.getElementById('urlInput');
-        const filenameInput = document.getElementById('filenameInput');
-        const formStatus = document.getElementById('formStatus');
-        const linkList = document.getElementById('linkList');
-        addLinkForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const url = urlInput.value.trim();
-            const filename = filenameInput.value.trim();
-            if (!url) return;
-            formStatus.textContent = 'Adding link...';
-            formStatus.style.color = '#333';
-            fetch('/api/add_link', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url, filename })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    formStatus.innerHTML = `✅ Link for <strong>${data.link.filename}</strong> added successfully!`;
-                    formStatus.style.color = 'green';
-                    const newLink = data.link;
-                    const newListItem = document.createElement('li');
-                    newListItem.id = `link-${newLink._id}`;
-                    newListItem.innerHTML = `
-                        <span class="file-info">${newLink.filename}</span>
-                        <div class="file-actions">
-                            <a href="/download/${newLink._id}" class="view-btn">View</a>
-                            <a href="/direct/${newLink._id}" class="direct-btn" target="_blank">Direct</a>
-                            <a href="${url}" class="original-btn" target="_blank">Original</a>
-                            <form action="/delete/${newLink._id}" method="POST" onsubmit="return confirm('Are you sure?');">
-                                <button type="submit" class="delete-btn">Delete</button>
-                            </form>
-                        </div>
-                    `;
-                    linkList.prepend(newListItem);
-                    addLinkForm.reset();
-                } else {
-                    formStatus.textContent = `❌ Failed: ${data.message}`;
-                    formStatus.style.color = 'red';
-                }
-            })
-            .catch(error => {
-                formStatus.textContent = '❌ An error occurred.';
-                formStatus.style.color = 'red';
-            });
-        });
-    </script>
+      })
+      .catch(err=>{ formStatus.textContent='❌ An error occurred while adding the link.'; formStatus.style.color='red'; console.error(err); });
+    });
+  </script>
 </body>
 </html>
-<!-- END OF FILE server/templates/dashboard.html -->
