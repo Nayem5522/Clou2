@@ -23,7 +23,7 @@
 
         .content-wrapper {
             width: 100%;
-            max-width: 700px; /* Adjust max-width as needed */
+            max-width: 700px;
             flex: 1;
             display: flex;
             flex-direction: column;
@@ -56,20 +56,20 @@
         #timer-countdown {
             font-size: 2.5rem;
             font-weight: 700;
-            color: #ffc107; /* A brighter color for the timer */
+            color: #ffc107;
             margin-top: 10px;
         }
         
         .ads-wrapper {
-            padding: 15px; /* Less padding for ad container */
+            padding: 15px;
         }
         
         .ad-slot {
-            margin: 20px auto; /* Space between ads */
+            margin: 20px auto;
         }
         
         .download-wrapper {
-            display: none; /* Hidden by default */
+            display: none;
         }
 
         .action-btn {
@@ -97,7 +97,7 @@
             color: #ccc;
             font-size: 14px;
             padding: 20px 0;
-            margin-top: auto; /* Pushes footer to the bottom */
+            margin-top: auto;
         }
     </style>
 </head>
@@ -109,8 +109,12 @@
         <div class="info-box">
             <h3>{{ link_info.filename }}</h3>
             <p><strong>Size:</strong> {{ format_size(link_info.size) }}</p>
-            <p>Your download link will be ready in:</p>
-            <div id="timer-countdown">5</div>
+            
+            <!-- ✨ মূল পরিবর্তন এখানে: টাইমারকে একটি আলাদা কন্টেইনারে রাখা হয়েছে ✨ -->
+            <div id="timer-container">
+                <p>Your download link will be ready in:</p>
+                <div id="timer-countdown">5</div>
+            </div>
         </div>
 
         <!-- ### BOX 2: All Advertisements Together ### -->
@@ -122,9 +126,9 @@
 
         <!-- ### BOX 3: Download Button (Initially Hidden) ### -->
         <div id="download-wrapper" class="download-wrapper">
-            <a href="{{ final_download_link }}" class="action-btn">
+            <button class="action-btn" onclick="openInNewTab('{{ final_download_link }}')">
                 ⬇️ Download Now
-            </a>
+            </button>
         </div>
         
     </div>
@@ -136,21 +140,34 @@
             let timer = 5;
             const countdownElement = document.getElementById('timer-countdown');
             const downloadWrapper = document.getElementById('download-wrapper');
+            // ✨ নতুন কন্টেইনারটিকে সিলেক্ট করা হয়েছে
+            const timerContainer = document.getElementById('timer-container');
 
             const interval = setInterval(() => {
                 timer--;
                 countdownElement.textContent = timer;
                 if (timer <= 0) {
                     clearInterval(interval);
-                    // Hide the timer
-                    countdownElement.parentElement.innerHTML = "<p style='font-size: 1.2rem; color: #28a745; font-weight: 600;'>✅ Your link is ready!</p>";
-                    // Show the download button container
+                    
+                    // ✨ শুধু টাইমার কন্টেইনারের ভিতরের অংশ পরিবর্তন করা হচ্ছে
+                    timerContainer.innerHTML = "<p style='font-size: 1.1rem; color: #28a745; font-weight: 600;'>Your link is generated.<br>Scroll down and click on the Download Now button.</p>";
+                    
+                    // ডাউনলোড বাটন দেখানো হচ্ছে
                     downloadWrapper.style.display = 'block';
                 }
             }, 1000);
         };
+
+        function openInNewTab(url) {
+            const newTab = window.open('about:blank', '_blank');
+            if (newTab) {
+                newTab.location.href = url;
+            } else {
+                alert('Please allow popups for this site to open your download link.');
+            }
+        }
     </script>
 
 </body>
 </html>
-<!-- END OF FILE server/templates/file.html -->
+<!-- END OF FILE server/templates/file.html --> 
