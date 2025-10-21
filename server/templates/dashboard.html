@@ -5,115 +5,266 @@
 <head>
     <meta charset="UTF-8">
     <title>Dashboard</title>
-    <!-- Making it mobile-friendly -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
-        /* Your existing styles */
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background-color: #f8f9fa; margin: 0; padding: 0; }
-        .container { max-width: 900px; margin: 40px auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        h2, h3 { text-align: center; color: #343a40; }
-        #addLinkForm { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
-        #addLinkForm input { padding: 10px; border-radius: 5px; border: 1px solid #ccc; }
-        #addLinkForm button { padding: 10px; }
-        ul { list-style: none; padding: 0; }
-        li { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #dee2e6; }
-        li:last-child { border-bottom: none; }
-        .file-info { color: #495057; word-break: break-all; margin-bottom: 10px; width: 100%; }
-        .file-actions { width: 100%; text-align: right; }
-        .file-actions form { display: inline; }
-        .file-actions a, .file-actions button { text-decoration: none; padding: 6px 12px; border-radius: 5px; color: white; border: none; cursor: pointer; font-size: 14px; white-space: nowrap; margin-left: 5px; }
-        .view-btn { background-color: #007bff; } .view-btn:hover { background-color: #0069d9; }
-        .direct-btn { background-color: #28a745; } .direct-btn:hover { background-color: #218838; }
-        .original-btn { background-color: #6c757d; } .original-btn:hover { background-color: #5a6268; }
-        .delete-btn { background-color: #dc3545; } .delete-btn:hover { background-color: #c82333; }
-        #formStatus { text-align: center; margin-top: 10px; font-weight: bold; }
-
-        /* --- STYLES FOR THE NEW ADMIN MENU --- */
-        .admin-menu-container { position: sticky; top: 0; background-color: #f8f9fa; z-index: 1000; padding: 10px 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .admin-menu-button { font-size: 24px; font-weight: bold; cursor: pointer; }
-        .admin-menu { display: none; position: absolute; top: 50px; left: 20px; background: white; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); list-style: none; padding: 10px 0; margin: 0; z-index: 999; }
-        .admin-menu li a { display: block; padding: 10px 20px; text-decoration: none; color: #333; }
-        .admin-menu li a:hover { background-color: #f0f0f0; }
-        
-        /* Media query for better mobile view */
-        @media (min-width: 600px) {
-            .file-info { width: auto; margin-bottom: 0; }
-            .file-actions { width: auto; }
+        :root {
+            --bg-color: #f4f7f9;
+            --primary-color: #007bff;
+            --text-color: #333;
+            --card-bg: #ffffff;
+            --shadow: 0 4px 15px rgba(0,0,0,0.05);
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            color: var(--text-color);
+        }
+        .header {
+            background-color: var(--card-bg);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .header h1 { font-size: 1.5rem; margin: 0; }
+        .header-actions a {
+            text-decoration: none;
+            color: var(--primary-color);
+            margin-left: 1.5rem;
+            font-weight: 500;
+        }
+        .header-actions a:hover { text-decoration: underline; }
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 2rem;
+        }
+        .card {
+            background: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            margin-bottom: 2rem;
+        }
+        .form-group { margin-bottom: 1rem; }
+        .form-group input {
+            width: 100%;
+            padding: 0.8rem 1rem;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            font-size: 1rem;
+            box-sizing: border-box;
+        }
+        .btn {
+            padding: 0.8rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            background-color: var(--primary-color);
+            color: white;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .btn:hover { background-color: #0056b3; }
+        .tabs { display: flex; border-bottom: 2px solid #e0e0e0; margin-bottom: 2rem; }
+        .tab-button {
+            padding: 1rem 1.5rem;
+            cursor: pointer;
+            background: none;
+            border: none;
+            font-size: 1rem;
+            font-weight: 600;
+            color: #888;
+            position: relative;
+        }
+        .tab-button.active { color: var(--primary-color); }
+        .tab-button.active::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--primary-color);
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .link-list { list-style: none; padding: 0; }
+        .link-item {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1.2rem 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .link-item:last-child { border-bottom: none; }
+        .file-info {
+            word-break: break-all;
+            font-weight: 500;
+            flex-grow: 1;
+        }
+        .file-actions { display: flex; align-items: center; gap: 0.5rem; margin-top: 10px; flex-shrink: 0; }
+        .action-btn {
+            text-decoration: none;
+            padding: 0.4rem 0.8rem;
+            border-radius: 6px;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+        .view-btn { background-color: #007bff; }
+        .restore-btn { background-color: #28a745; }
+        .delete-btn { background-color: #dc3545; }
+        .force-delete-btn { background-color: #c82333; }
+        @media (min-width: 768px) {
+            .link-item { flex-wrap: nowrap; }
+            .file-info { padding-right: 1rem; }
+            .file-actions { margin-top: 0; }
         }
     </style>
 </head>
 <body>
-    <!-- --- THE NEW ADMIN MENU --- -->
-    <div class="admin-menu-container">
-        <div class="admin-menu-button" onclick="toggleMenu()">☰</div>
-        <ul class="admin-menu" id="adminMenu">
-            <li><a href="/admin/ads">Manage Ads</a></li>
-            <li><a href="/logout">Logout</a></li>
-        </ul>
-    </div>
-    
-    <!-- Your existing container and content -->
+
+    <header class="header">
+        <h1>Dashboard</h1>
+        <div class="header-actions">
+            <a href="/admin/ads">Manage Ads</a>
+            <a href="/logout">Logout</a>
+        </div>
+    </header>
+
     <div class="container">
-        <h2>🔗 Link Dashboard</h2>
-        <form id="addLinkForm">
-            <input type="url" name="url" id="urlInput" placeholder="Enter download URL (Drive or Direct)" required>
-            <input type="text" name="filename" id="filenameInput" placeholder="Enter custom filename (optional)">
-            <button type="submit">Add Link</button>
-        </form>
-        <p id="formStatus"></p>
-        <h3>🗂 Added Links</h3>
-        <ul id="linkList">
-            {% for link in links %}
-            <li id="link-{{ link._id }}">
-                <span class="file-info">{{ link.filename }}</span>
-                <div class="file-actions">
-                    <a href="/download/{{ link._id }}" class="view-btn">View</a>
-                    <a href="/direct/{{ link._id }}" class="direct-btn" target="_blank">Direct</a>
-                    <a href="{{ link.original_url }}" class="original-btn" target="_blank">Original</a>
-                    <form action="/delete/{{ link._id }}" method="POST" onsubmit="return confirm('Are you sure?');">
-                        <button type="submit" class="delete-btn">Delete</button>
-                    </form>
+        <div class="card">
+            <h2>Add New Link</h2>
+            <form id="addLinkForm">
+                <div class="form-group">
+                    <input type="url" id="urlInput" placeholder="Enter download URL (Drive or Direct)" required>
                 </div>
-            </li>
-            {% endfor %}
-        </ul>
-        <!-- Removed the old logout button as it's now in the menu -->
+                <div class="form-group">
+                    <input type="text" id="filenameInput" placeholder="Custom filename (optional)">
+                </div>
+                <button type="submit" class="btn">Add Link</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <div class="tabs">
+                <button class="tab-button active" onclick="openTab(event, 'active-links')">Active Links</button>
+                <button class="tab-button" onclick="openTab(event, 'deleted-files')">Deleted Files</button>
+            </div>
+
+            <div id="active-links" class="tab-content active">
+                <ul class="link-list">
+                    {% for link in active_links %}
+                    <li class="link-item">
+                        <span class="file-info">{{ link.filename }}</span>
+                        <div class="file-actions">
+                            <a href="/download/{{ link._id }}" target="_blank" class="action-btn view-btn">View</a>
+                            <form action="/delete/{{ link._id }}" method="POST" class="form-delete">
+                                <button type="submit" class="action-btn delete-btn">Delete</button>
+                            </form>
+                        </div>
+                    </li>
+                    {% else %}
+                    <li>No active links found.</li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <div id="deleted-files" class="tab-content">
+                <ul class="link-list">
+                    {% for link in deleted_links %}
+                    <li class="link-item">
+                        <span class="file-info">{{ link.filename }}</span>
+                        <div class="file-actions">
+                            <form action="/restore/{{ link._id }}" method="POST">
+                                <button type="submit" class="action-btn restore-btn">Restore</button>
+                            </form>
+                            <form action="/force-delete/{{ link._id }}" method="POST" class="form-force-delete">
+                                <button type="submit" class="action-btn force-delete-btn">Delete Permanently</button>
+                            </form>
+                        </div>
+                    </li>
+                    {% else %}
+                    <li>No deleted files found.</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
     </div>
 
     <script>
-        // --- NEW JAVASCRIPT FOR THE MENU ---
-        function toggleMenu() {
-            const menu = document.getElementById('adminMenu');
-            if (menu.style.display === 'block') {
-                menu.style.display = 'none';
-            } else {
-                menu.style.display = 'block';
+        function openTab(evt, tabName) {
+            let i, tabcontent, tablinks;
+            tabcontent = document.getElementsByClassName("tab-content");
+            for (i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].style.display = "none";
             }
+            tablinks = document.getElementsByClassName("tab-button");
+            for (i = 0; i < tablinks.length; i++) {
+                tablinks[i].className = tablinks[i].className.replace(" active", "");
+            }
+            document.getElementById(tabName).style.display = "block";
+            evt.currentTarget.className += " active";
         }
-        
-        // Hide menu if user clicks outside of it
-        document.addEventListener('click', function(event) {
-            const menu = document.getElementById('adminMenu');
-            const button = document.querySelector('.admin-menu-button');
-            if (!menu.contains(event.target) && !button.contains(event.target)) {
-                menu.style.display = 'none';
-            }
+
+        // Handle delete confirmation
+        document.querySelectorAll('.form-delete').forEach(form => {
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                Swal.fire({
+                    title: 'Are you sure?',
+                    text: "This will move the link to the deleted files.",
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#3085d6',
+                    cancelButtonColor: '#d33',
+                    confirmButtonText: 'Yes, delete it!'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        form.submit();
+                    }
+                });
+            });
         });
 
-        // Your existing Javascript for adding links
-        const addLinkForm = document.getElementById('addLinkForm');
-        const urlInput = document.getElementById('urlInput');
-        const filenameInput = document.getElementById('filenameInput');
-        const formStatus = document.getElementById('formStatus');
-        const linkList = document.getElementById('linkList');
-        addLinkForm.addEventListener('submit', (e) => {
+        // Handle permanent delete confirmation
+        document.querySelectorAll('.form-force-delete').forEach(form => {
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                Swal.fire({
+                    title: 'Delete Permanently?',
+                    text: "You won't be able to recover this!",
+                    icon: 'error',
+                    showCancelButton: true,
+                    confirmButtonColor: '#d33',
+                    cancelButtonColor: '#3085d6',
+                    confirmButtonText: 'Yes, delete forever!'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        form.submit();
+                    }
+                });
+            });
+        });
+
+        // Handle Add Link form with AJAX
+        document.getElementById('addLinkForm').addEventListener('submit', function(e) {
             e.preventDefault();
-            const url = urlInput.value.trim();
-            const filename = filenameInput.value.trim();
-            if (!url) return;
-            formStatus.textContent = 'Adding link...';
-            formStatus.style.color = '#333';
+            const url = document.getElementById('urlInput').value.trim();
+            const filename = document.getElementById('filenameInput').value.trim();
+
             fetch('/api/add_link', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -122,32 +273,27 @@
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    formStatus.innerHTML = `✅ Link for <strong>${data.link.filename}</strong> added successfully!`;
-                    formStatus.style.color = 'green';
-                    const newLink = data.link;
-                    const newListItem = document.createElement('li');
-                    newListItem.id = `link-${newLink._id}`;
-                    newListItem.innerHTML = `
-                        <span class="file-info">${newLink.filename}</span>
-                        <div class="file-actions">
-                            <a href="/download/${newLink._id}" class="view-btn">View</a>
-                            <a href="/direct/${newLink._id}" class="direct-btn" target="_blank">Direct</a>
-                            <a href="${url}" class="original-btn" target="_blank">Original</a>
-                            <form action="/delete/${newLink._id}" method="POST" onsubmit="return confirm('Are you sure?');">
-                                <button type="submit" class="delete-btn">Delete</button>
-                            </form>
-                        </div>
-                    `;
-                    linkList.prepend(newListItem);
-                    addLinkForm.reset();
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Link Added!',
+                        text: `Successfully added ${data.link.filename}`,
+                        timer: 2000,
+                        showConfirmButton: false
+                    }).then(() => location.reload());
                 } else {
-                    formStatus.textContent = `❌ Failed: ${data.message}`;
-                    formStatus.style.color = 'red';
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Oops...',
+                        text: `Failed: ${data.message}`
+                    });
                 }
             })
             .catch(error => {
-                formStatus.textContent = '❌ An error occurred.';
-                formStatus.style.color = 'red';
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'An unexpected error occurred.'
+                });
             });
         });
     </script>
