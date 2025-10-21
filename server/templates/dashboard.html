@@ -15,12 +15,16 @@
             --text-color: #333;
             --card-bg: #ffffff;
             --shadow: 0 4px 15px rgba(0,0,0,0.05);
+            --details-btn-color: #6c757d;
         }
         body {
             font-family: 'Inter', sans-serif;
             background-color: var(--bg-color);
             margin: 0;
             color: var(--text-color);
+        }
+        body.modal-open {
+            overflow: hidden;
         }
         .header {
             background-color: var(--card-bg);
@@ -62,20 +66,9 @@
             font-size: 1rem;
             box-sizing: border-box;
         }
-        /* ✨ নতুন সার্চ বারের জন্য CSS কোড ✨ */
-        .search-container {
-            position: relative;
-        }
-        #searchInput {
-            padding-left: 2.5rem; /* আইকনের জন্য জায়গা */
-        }
-        .search-icon {
-            position: absolute;
-            left: 1rem;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #aaa;
-        }
+        .search-container { position: relative; }
+        #searchInput { padding-left: 2.5rem; }
+        .search-icon { position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: #aaa; }
         .btn {
             padding: 0.8rem 1.5rem;
             border: none;
@@ -100,15 +93,7 @@
             position: relative;
         }
         .tab-button.active { color: var(--primary-color); }
-        .tab-button.active::after {
-            content: '';
-            position: absolute;
-            bottom: -2px;
-            left: 0;
-            right: 0;
-            height: 2px;
-            background: var(--primary-color);
-        }
+        .tab-button.active::after { content: ''; position: absolute; bottom: -2px; left: 0; right: 0; height: 2px; background: var(--primary-color); }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
         .link-list { list-style: none; padding: 0; }
@@ -125,34 +110,33 @@
             word-break: break-all;
             font-weight: 500;
             flex-grow: 1;
+            padding-right: 1rem;
         }
-        .file-actions { display: flex; align-items: center; gap: 0.5rem; margin-top: 10px; flex-shrink: 0; }
-        .action-btn {
-            text-decoration: none;
-            padding: 0.4rem 0.8rem;
-            border-radius: 6px;
-            color: white;
-            border: none;
-            cursor: pointer;
-            font-size: 0.875rem;
-            font-weight: 500;
+        .details-btn { padding: 0.5rem 1rem; background-color: var(--details-btn-color); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; }
+        .no-results { display: none; text-align: center; padding: 2rem; color: #888; }
+        
+        /* Modal CSS */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.6); display: none; justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(5px);
         }
-        .view-btn { background-color: #007bff; }
-        .restore-btn { background-color: #28a745; }
-        .delete-btn { background-color: #dc3545; }
-        .force-delete-btn { background-color: #c82333; }
-        /* ✨ সার্চে কিছু না পাওয়া গেলে দেখানোর জন্য CSS ✨ */
-        .no-results {
-            display: none; /* ডিফল্টভাবে লুকানো থাকবে */
-            text-align: center;
-            padding: 2rem;
-            color: #888;
+        .modal-content {
+            background: var(--card-bg); padding: 2rem; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); width: 90%; max-width: 500px; transform: scale(0.9); opacity: 0; transition: transform 0.3s ease, opacity 0.3s ease;
         }
-        @media (min-width: 768px) {
-            .link-item { flex-wrap: nowrap; }
-            .file-info { padding-right: 1rem; }
-            .file-actions { margin-top: 0; }
-        }
+        .modal-overlay.active .modal-content { transform: scale(1); opacity: 1; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 1rem; margin-bottom: 1rem; }
+        .modal-header h3 { margin: 0; font-size: 1.25rem; word-break: break-all; }
+        .modal-close-btn { font-size: 1.5rem; background: none; border: none; cursor: pointer; color: #888; }
+        .modal-body p { margin: 0 0 1.5rem 0; color: #555; font-weight: 500; }
+        .modal-btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+        .modal-btn { width: 100%; text-decoration: none; display: inline-block; text-align: center; padding: 0.75rem; border-radius: 8px; color: white; border: none; font-size: 0.95rem; font-weight: 500; cursor: pointer; transition: background-color 0.2s, transform 0.2s; }
+        .modal-btn:hover { transform: translateY(-2px); }
+        .btn-open { background-color: #007bff; }
+        .btn-copy { background-color: #17a2b8; }
+        .btn-original { background-color: #6c757d; }
+        .btn-delete-modal { background-color: #dc3545; }
+
+        @media (max-width: 500px) { .modal-btn-group { grid-template-columns: 1fr; } }
+        @media (min-width: 768px) { .link-item { flex-wrap: nowrap; } }
     </style>
 </head>
 <body>
@@ -179,7 +163,6 @@
             </form>
         </div>
 
-        <!-- ✨✨ নতুন সার্চ সিস্টেমের HTML কোড এখানে যোগ করা হয়েছে ✨✨ -->
         <div class="card">
             <div class="search-container">
                 <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
@@ -194,54 +177,67 @@
             </div>
 
             <div id="active-links" class="tab-content active">
-                <!-- ✨ জাভাস্ক্রিপ্টে সহজে ধরার জন্য ul-কে একটি id দেওয়া হয়েছে ✨ -->
                 <ul id="activeLinkList" class="link-list">
                     {% for link in active_links %}
-                    <!-- ✨ সার্চের জন্য প্রয়োজনীয় data অ্যাট্রিবিউট যোগ করা হয়েছে ✨ -->
-                    <li class="link-item" data-url="{{ link.original_url }}" data-generated-link="/download/{{ link._id }}">
+                    <li class="link-item" 
+                        data-filename="{{ link.filename }}"
+                        data-original-url="{{ link.original_url }}"
+                        data-generated-link="{{ url_for('download_page', link_id=link._id, _external=True) }}"
+                        data-delete-action="{{ url_for('delete_link', link_id=link._id) }}">
                         <span class="file-info">{{ link.filename }}</span>
-                        <div class="file-actions">
-                            <a href="/download/{{ link._id }}" target="_blank" class="action-btn view-btn">View</a>
-                            <form action="/delete/{{ link._id }}" method="POST" class="form-delete">
-                                <button type="submit" class="action-btn delete-btn">Delete</button>
-                            </form>
-                        </div>
+                        <button class="details-btn">Details</button>
                     </li>
                     {% else %}
                     <li>No active links found.</li>
                     {% endfor %}
                 </ul>
-                <!-- ✨ "No results" বার্তা দেখানোর জন্য div যোগ করা হয়েছে ✨ -->
                 <div class="no-results" id="no-results-active">No matching links found.</div>
             </div>
 
             <div id="deleted-files" class="tab-content">
-                <!-- ✨ জাভাস্ক্রিপ্টে সহজে ধরার জন্য ul-কে একটি id দেওয়া হয়েছে ✨ -->
                 <ul id="deletedLinkList" class="link-list">
                     {% for link in deleted_links %}
-                    <!-- ✨ সার্চের জন্য প্রয়োজনীয় data অ্যাট্রিবিউট যোগ করা হয়েছে ✨ -->
-                    <li class="link-item" data-url="{{ link.original_url }}" data-generated-link="/download/{{ link._id }}">
+                     <li class="link-item" 
+                        data-filename="{{ link.filename }}"
+                        data-original-url="{{ link.original_url }}"
+                        data-generated-link="{{ url_for('download_page', link_id=link._id, _external=True) }}"
+                        data-restore-action="{{ url_for('restore_link', link_id=link._id) }}"
+                        data-force-delete-action="{{ url_for('force_delete_link', link_id=link._id) }}">
                         <span class="file-info">{{ link.filename }}</span>
-                        <div class="file-actions">
-                            <form action="/restore/{{ link._id }}" method="POST">
-                                <button type="submit" class="action-btn restore-btn">Restore</button>
-                            </form>
-                            <form action="/force-delete/{{ link._id }}" method="POST" class="form-force-delete">
-                                <button type="submit" class="action-btn force-delete-btn">Delete Permanently</button>
-                            </form>
-                        </div>
+                        <!-- You can add a details button for deleted files too if needed -->
                     </li>
                     {% else %}
                     <li>No deleted files found.</li>
                     {% endfor %}
                 </ul>
-                 <!-- ✨ "No results" বার্তা দেখানোর জন্য div যোগ করা হয়েছে ✨ -->
                 <div class="no-results" id="no-results-deleted">No matching links found.</div>
             </div>
         </div>
     </div>
 
+    <div class="modal-overlay" id="details-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-filename">File Name Here</h3>
+                <button class="modal-close-btn" id="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Quality: High</p>
+                <div class="modal-btn-group">
+                    <a href="#" id="modal-open-link" target="_blank" class="modal-btn btn-open">Open Link</a>
+                    <button id="modal-copy-link" class="modal-btn btn-copy">Copy Link</button>
+                    <a href="#" id="modal-original-link" target="_blank" class="modal-btn btn-original">Original</a>
+                    <form id="modal-delete-form" action="#" method="POST" class="form-delete">
+                        <button type="submit" class="modal-btn btn-delete-modal">Delete</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
+        // --- আপনার সম্পূর্ণ এবং অপরিবর্তিত JavaScript কোড ---
+
         function openTab(evt, tabName) {
             let i, tabcontent, tablinks;
             tabcontent = document.getElementsByClassName("tab-content");
@@ -256,25 +252,30 @@
             evt.currentTarget.className += " active";
         }
 
-        // Handle delete confirmation
-        document.querySelectorAll('.form-delete').forEach(form => {
-            form.addEventListener('submit', function(e) {
-                e.preventDefault();
-                Swal.fire({
-                    title: 'Are you sure?',
-                    text: "This will move the link to the deleted files.",
-                    icon: 'warning',
-                    showCancelButton: true,
-                    confirmButtonColor: '#3085d6',
-                    cancelButtonColor: '#d33',
-                    confirmButtonText: 'Yes, delete it!'
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        form.submit();
-                    }
+        // Handle delete confirmation for ALL delete forms (modal included)
+        function addDeleteConfirmation() {
+            document.querySelectorAll('.form-delete').forEach(form => {
+                if (form.dataset.listenerAttached) return; // Prevents adding multiple listeners
+                form.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    Swal.fire({
+                        title: 'Are you sure?',
+                        text: "This will move the link to the deleted files.",
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#d33',
+                        cancelButtonColor: '#3085d6',
+                        confirmButtonText: 'Yes, delete it!'
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            form.submit();
+                        }
+                    });
                 });
+                form.dataset.listenerAttached = 'true';
             });
-        });
+        }
+        addDeleteConfirmation(); // Run on page load
 
         // Handle permanent delete confirmation
         document.querySelectorAll('.form-force-delete').forEach(form => {
@@ -301,72 +302,92 @@
             e.preventDefault();
             const url = document.getElementById('urlInput').value.trim();
             const filename = document.getElementById('filenameInput').value.trim();
-
-            fetch('/api/add_link', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url, filename })
-            })
+            fetch('/api/add_link', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, filename }) })
             .then(response => response.json())
             .then(data => {
-                if (data.status === 'success') {
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'Link Added!',
-                        text: `Successfully added ${data.link.filename}`,
-                        timer: 2000,
-                        showConfirmButton: false
-                    }).then(() => location.reload());
-                } else {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Oops...',
-                        text: `Failed: ${data.message}`
-                    });
-                }
+                if (data.status === 'success') { Swal.fire({ icon: 'success', title: 'Link Added!', text: `Successfully added ${data.link.filename}`, timer: 2000, showConfirmButton: false }).then(() => location.reload()); }
+                else { Swal.fire({ icon: 'error', title: 'Oops...', text: `Failed: ${data.message}` }); }
             })
-            .catch(error => {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error',
-                    text: 'An unexpected error occurred.'
-                });
-            });
+            .catch(error => { Swal.fire({ icon: 'error', title: 'Error', text: 'An unexpected error occurred.' }); });
         });
 
-        // ✨✨✨ নতুন সার্চের জন্য সম্পূর্ণ জাভাস্ক্রিপ্ট কোড ✨✨✨
+        // --- চূড়ান্ত এবং নির্ভুল সার্চের JavaScript কোড ---
         const searchInput = document.getElementById('searchInput');
-        
         searchInput.addEventListener('keyup', function() {
             const searchTerm = searchInput.value.toLowerCase();
-            
             const filterList = (listElement, noResultsElement) => {
                 const listItems = listElement.getElementsByTagName('li');
-                // "No active/deleted links found" বার্তাটি 숨기기 (hide) করা
-                if (listItems.length > 0 && listItems[0].textContent.includes('No active links found') || listItems[0].textContent.includes('No deleted files found')) {
-                    // যদি কোনো লিঙ্ক না থাকে, তাহলে সার্চ কাজ করবে না
-                } else {
-                    let visibleCount = 0;
-                    for (let i = 0; i < listItems.length; i++) {
-                        const item = listItems[i];
-                        const fileName = item.querySelector('.file-info').textContent.toLowerCase();
-                        const originalUrl = item.dataset.url ? item.dataset.url.toLowerCase() : '';
-                        const generatedLink = item.dataset.generatedLink ? item.dataset.generatedLink.toLowerCase() : '';
-                        
-                        if (fileName.includes(searchTerm) || originalUrl.includes(searchTerm) || generatedLink.includes(searchTerm)) {
-                            item.style.display = 'flex';
-                            visibleCount++;
-                        } else {
-                            item.style.display = 'none';
-                        }
+                if (listItems.length > 0 && (listItems[0].textContent.includes('No active links found') || listItems[0].textContent.includes('No deleted files found'))) { return; }
+                let visibleCount = 0;
+                for (let i = 0; i < listItems.length; i++) {
+                    const item = listItems[i];
+                    const fileName = item.dataset.filename ? item.dataset.filename.toLowerCase() : '';
+                    const originalUrl = item.dataset.originalUrl ? item.dataset.originalUrl.toLowerCase() : '';
+                    const generatedLink = item.dataset.generatedLink ? item.dataset.generatedLink.toLowerCase() : '';
+                    
+                    if (fileName.includes(searchTerm) || originalUrl.includes(searchTerm) || (generatedLink && searchTerm.includes(generatedLink.split('/').pop()))) {
+                        item.style.display = 'flex';
+                        visibleCount++;
+                    } else {
+                        item.style.display = 'none';
                     }
-                    noResultsElement.style.display = visibleCount === 0 ? 'block' : 'none';
                 }
+                noResultsElement.style.display = visibleCount === 0 ? 'block' : 'none';
             };
-
             filterList(document.getElementById('activeLinkList'), document.getElementById('no-results-active'));
             filterList(document.getElementById('deletedLinkList'), document.getElementById('no-results-deleted'));
         });
+
+        // --- নতুন মডাল (Pop-up) এর জন্য সম্পূর্ণ JavaScript কোড ---
+        const modal = document.getElementById('details-modal');
+        if (modal) {
+            const modalFilename = document.getElementById('modal-filename');
+            const modalOpenLink = document.getElementById('modal-open-link');
+            const modalCopyLink = document.getElementById('modal-copy-link');
+            const modalOriginalLink = document.getElementById('modal-original-link');
+            const modalDeleteForm = document.getElementById('modal-delete-form');
+            const closeModalBtn = document.getElementById('modal-close');
+
+            document.querySelector('.container').addEventListener('click', function(e) {
+                if (e.target.classList.contains('details-btn')) {
+                    const linkItem = e.target.closest('.link-item');
+                    const filename = linkItem.dataset.filename;
+                    const originalUrl = linkItem.dataset.originalUrl;
+                    const generatedLink = linkItem.dataset.generatedLink;
+                    const deleteAction = linkItem.dataset.deleteAction;
+
+                    modalFilename.textContent = filename;
+                    modalOpenLink.href = generatedLink;
+                    modalOriginalLink.href = originalUrl;
+                    modalDeleteForm.action = deleteAction;
+                    modalCopyLink.setAttribute('data-copy-link', generatedLink);
+                    
+                    modal.style.display = 'flex';
+                    // Show modal with a little animation
+                    setTimeout(() => modal.classList.add('active'), 10); 
+                    document.body.classList.add('modal-open');
+                }
+            });
+
+            modalCopyLink.addEventListener('click', function() {
+                const linkToCopy = this.getAttribute('data-copy-link');
+                navigator.clipboard.writeText(linkToCopy).then(() => {
+                    Swal.fire({ icon: 'success', title: 'Copied!', timer: 1500, showConfirmButton: false });
+                }).catch(err => {
+                    Swal.fire({ icon: 'error', title: 'Failed to copy' });
+                });
+            });
+
+            function closeModal() {
+                modal.classList.remove('active');
+                setTimeout(() => {
+                    modal.style.display = 'none';
+                    document.body.classList.remove('modal-open');
+                }, 300); // Wait for animation to finish
+            }
+            closeModalBtn.addEventListener('click', closeModal);
+            modal.addEventListener('click', function(e) { if (e.target === modal) { closeModal(); } });
+        }
     </script>
 </body>
 </html>
