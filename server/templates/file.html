@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <title>{{ link_info.filename }}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         body {
             text-align: center;
@@ -12,153 +13,142 @@
             background: linear-gradient(135deg, #141e30, #243b55);
             color: #fff;
             margin: 0;
-            padding: 0;
+            padding: 20px 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
         }
-        .banner {
+
+        .content-wrapper {
             width: 100%;
-            max-height: 250px;
-            overflow: hidden;
-            cursor: pointer;
+            max-width: 700px; /* Adjust max-width as needed */
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
-        .banner img {
-            width: 100%;
-            height: auto;
-            display: block;
-            transition: transform 0.5s ease;
-        }
-        .banner:hover img {
-            transform: scale(1.05);
-        }
-        .box {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 30px;
+
+        .info-box, .ads-wrapper, .download-wrapper {
+            background: rgba(255, 255, 255, 0.08);
+            padding: 25px 30px;
             border-radius: 15px;
-            display: inline-block;
-            box-shadow: 0 0 15px rgba(0,0,0,0.3);
-            margin: 30px auto;
+            box-shadow: 0 0 20px rgba(0,0,0,0.3);
             backdrop-filter: blur(10px);
-            max-width: 500px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 25px;
+            box-sizing: border-box;
         }
+
         h3 {
             word-break: break-all;
-            margin-bottom: 10px;
+            margin: 0 0 10px 0;
+            font-size: 1.5rem;
         }
-        p {
+        
+        .info-box p {
             color: #ddd;
             margin-top: 5px;
+            font-size: 1.1rem;
         }
-        .ad-container {
-            margin: 20px auto;
-            max-width: 728px;
-        }
-        #timer-ui {
-            padding: 20px;
-        }
+
         #timer-countdown {
-            font-size: 26px;
-            font-weight: bold;
-            color: #ff4d4d;
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #ffc107; /* A brighter color for the timer */
+            margin-top: 10px;
         }
-        #success-message {
-            display: none;
-            padding: 15px;
-            background-color: rgba(40,167,69,0.2);
-            color: #d4edda;
-            border: 1px solid #28a745;
-            border-radius: 5px;
-            font-weight: bold;
+        
+        .ads-wrapper {
+            padding: 15px; /* Less padding for ad container */
         }
-        #button-container {
-            display: none;
-            margin-top: 25px;
+        
+        .ad-slot {
+            margin: 20px auto; /* Space between ads */
         }
+        
+        .download-wrapper {
+            display: none; /* Hidden by default */
+        }
+
         .action-btn {
             border: none;
-            padding: 15px 35px;
+            padding: 15px 40px;
             border-radius: 50px;
             cursor: pointer;
-            font-size: 18px;
-            font-weight: bold;
+            font-size: 1.2rem;
+            font-weight: 700;
             color: white;
             background: linear-gradient(135deg, #28a745, #218838);
             transition: all 0.3s ease;
             box-shadow: 0 5px 15px rgba(40,167,69,0.4);
+            display: inline-block;
+            text-decoration: none;
         }
+
         .action-btn:hover {
-            transform: translateY(-3px);
-            background: linear-gradient(135deg, #34ce57, #1e7e34);
+            transform: translateY(-4px) scale(1.05);
+            box-shadow: 0 8px 20px rgba(40,167,69,0.5);
         }
+
         footer {
+            width: 100%;
             color: #ccc;
             font-size: 14px;
-            padding: 15px;
-            margin-top: 40px;
+            padding: 20px 0;
+            margin-top: auto; /* Pushes footer to the bottom */
         }
     </style>
 </head>
 <body>
 
-    <!-- 🔹 Banner image clickable -->
-    <div class="banner" onclick="window.open('https://pmwbd.vercel.app', '_blank')">
-        <img src="https://i.postimg.cc/3RPyjtvc/IMG-20250817-043812-084.jpg" alt="Banner">
-    </div>
+    <div class="content-wrapper">
 
-    <div class="ad-container" id="header-ad">{{ ads.header_ad|safe }}</div>
-
-    <div class="box">
-        <h3>📦 {{ link_info.filename }}</h3>
-        <p>Size: {{ format_size(link_info.size) }}</p>
-        <div class="ad-container" id="details-ad">{{ ads.details_ad|safe }}</div>
-
-        <div id="timer-ui">
-            <p>Your link will be ready in:</p>
+        <!-- ### BOX 1: File Info and Countdown Timer ### -->
+        <div class="info-box">
+            <h3>{{ link_info.filename }}</h3>
+            <p><strong>Size:</strong> {{ format_size(link_info.size) }}</p>
+            <p>Your download link will be ready in:</p>
             <div id="timer-countdown">5</div>
         </div>
 
-        <div id="success-message">✅ Your link is generated!</div>
-
-        <div id="button-container">
-            <!-- ⬇️ Download Button -->
-            <button class="action-btn" onclick="openInNewTab('{{ final_download_link }}')">
-                ⬇️ Download Now
-            </button>
+        <!-- ### BOX 2: All Advertisements Together ### -->
+        <div class="ads-wrapper">
+            <div class="ad-slot" id="header-ad-slot">{{ ads.header_ad|safe }}</div>
+            <div class="ad-slot" id="details-ad-slot">{{ ads.details_ad|safe }}</div>
+            <div class="ad-slot" id="footer-ad-slot">{{ ads.footer_ad|safe }}</div>
         </div>
-    </div>
 
-    <div class="ad-container" id="footer-ad">{{ ads.footer_ad|safe }}</div>
+        <!-- ### BOX 3: Download Button (Initially Hidden) ### -->
+        <div id="download-wrapper" class="download-wrapper">
+            <a href="{{ final_download_link }}" class="action-btn">
+                ⬇️ Download Now
+            </a>
+        </div>
+        
+    </div>
 
     <footer>© {{ current_year }} PMWBD - All Rights Reserved</footer>
 
     <script>
-        // Countdown timer
         window.onload = function() {
             let timer = 5;
             const countdownElement = document.getElementById('timer-countdown');
-            const timerUi = document.getElementById('timer-ui');
-            const successMessage = document.getElementById('success-message');
-            const buttonContainer = document.getElementById('button-container');
+            const downloadWrapper = document.getElementById('download-wrapper');
 
             const interval = setInterval(() => {
                 timer--;
                 countdownElement.textContent = timer;
                 if (timer <= 0) {
                     clearInterval(interval);
-                    timerUi.style.display = 'none';
-                    successMessage.style.display = 'block';
-                    buttonContainer.style.display = 'block';
+                    // Hide the timer
+                    countdownElement.parentElement.innerHTML = "<p style='font-size: 1.2rem; color: #28a745; font-weight: 600;'>✅ Your link is ready!</p>";
+                    // Show the download button container
+                    downloadWrapper.style.display = 'block';
                 }
             }, 1000);
         };
-
-        // 🔗 Force open link in a new tab
-        function openInNewTab(url) {
-            const newTab = window.open('about:blank', '_blank');
-            if (newTab) {
-                newTab.location.href = url;
-            } else {
-                alert('Please allow popups for this site to open your download link.');
-            }
-        }
     </script>
 
 </body>
