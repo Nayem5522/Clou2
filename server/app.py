@@ -128,21 +128,51 @@ def manage_ads():
     current_ads = settings_collection.find_one() or {}
     return render_template("ads.html", ads=current_ads)
 
-# --- Public Download Page ---
+# --- Public Download Page --- 
+
 @app.route("/download/<link_id>")
 def download_page(link_id):
     try:
         link_info = links_collection.find_one({"_id": ObjectId(link_id)})
-        # Check if link is soft-deleted
+        # লিঙ্কটি মুছে ফেলা হয়েছে কিনা তা পরীক্ষা করুন
         if not link_info or 'deleted_at' in link_info:
             return "❌ Link not found or has been deleted.", 404
         
         ads = settings_collection.find_one() or {}
         
+        # --- মূল পরিবর্তন এখানে ---
         if link_info.get("is_gdrive"):
-            final_download_link = f"https://drive.google.com/uc?export=download&id={link_info['file_id']}"
+            file_id = link_info['file_id']
+            
+            # ধাপ ১: প্রাথমিক ডাউনলোড URL তৈরি করা
+            initial_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+            
+            final_download_link = initial_url # ডিফল্ট লিঙ্ক
+            
+            try:
+                # ধাপ ২: সার্ভার থেকে একটি হেড রিকোয়েস্ট পাঠিয়ে কুকি সংগ্রহ করা
+                # আমরা stream=True ব্যবহার করছি যাতে পুরো ফাইল ডাউনলোড না হয়
+                session = requests.Session()
+                response = session.get(initial_url, stream=True)
+                
+                # ধাপ ৩: কুকি থেকে কনফার্মেশন টোকেন খুঁজে বের করা
+                token = None
+                for key, value in response.cookies.items():
+                    if key.startswith('download_warning'):
+                        token = value
+                        break # টোকেন পাওয়া গেলে লুপ ব্রেক করি
+
+                # ধাপ ৪: টোকেন পাওয়া গেলে, সেটি ব্যবহার করে নতুন ডাউনলোড লিঙ্ক তৈরি করা
+                if token:
+                    final_download_link = f"https://drive.google.com/uc?export=download&confirm={token}&id={file_id}"
+
+            except requests.RequestException:
+                # যদি গুগল সার্ভারে কানেক্ট করতে কোনো সমস্যা হয়, তাহলে আগের মতোই সাধারণ লিঙ্কটি ব্যবহৃত হবে
+                pass
+
         else:
             final_download_link = link_info['original_url']
+        # --- পরিবর্তন শেষ ---
 
         file_size = None
         try:
@@ -161,6 +191,8 @@ def download_page(link_id):
         
     except Exception as e:
         return f"An error occurred: {e}", 500
+
+# --- END OF MODIFIED FUNCTION ---
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get('PORT', 10000)))
