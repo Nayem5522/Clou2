@@ -140,39 +140,41 @@ def download_page(link_id):
         
         ads = settings_collection.find_one() or {}
         
-        # --- মূল পরিবর্তন এখানে ---
         if link_info.get("is_gdrive"):
             file_id = link_info['file_id']
-            
-            # ধাপ ১: প্রাথমিক ডাউনলোড URL তৈরি করা
             initial_url = f"https://drive.google.com/uc?export=download&id={file_id}"
             
             final_download_link = initial_url # ডিফল্ট লিঙ্ক
             
             try:
-                # ধাপ ২: সার্ভার থেকে একটি হেড রিকোয়েস্ট পাঠিয়ে কুকি সংগ্রহ করা
-                # আমরা stream=True ব্যবহার করছি যাতে পুরো ফাইল ডাউনলোড না হয়
-                session = requests.Session()
-                response = session.get(initial_url, stream=True)
+                # --- নতুন পরিবর্তন এখানে ---
+                # একটি সাধারণ ব্রাউজারের User-Agent হেডার যোগ করা হয়েছে
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                }
                 
-                # ধাপ ৩: কুকি থেকে কনফার্মেশন টোকেন খুঁজে বের করা
+                # রিকোয়েস্ট পাঠানোর সময় হেডারটি ব্যবহার করা
+                session = requests.Session()
+                response = session.get(initial_url, stream=True, headers=headers)
+                
                 token = None
                 for key, value in response.cookies.items():
                     if key.startswith('download_warning'):
                         token = value
-                        break # টোকেন পাওয়া গেলে লুপ ব্রেক করি
+                        break
 
-                # ধাপ ৪: টোকেন পাওয়া গেলে, সেটি ব্যবহার করে নতুন ডাউনলোড লিঙ্ক তৈরি করা
                 if token:
+                    # টোকেন ব্যবহার করে চূড়ান্ত ডাউনলোড লিঙ্ক তৈরি করা
                     final_download_link = f"https://drive.google.com/uc?export=download&confirm={token}&id={file_id}"
+                # --- পরিবর্তন শেষ ---
 
-            except requests.RequestException:
-                # যদি গুগল সার্ভারে কানেক্ট করতে কোনো সমস্যা হয়, তাহলে আগের মতোই সাধারণ লিঙ্কটি ব্যবহৃত হবে
+            except requests.RequestException as e:
+                # যদি কোনো নেটওয়ার্ক সমস্যা হয়, তাহলে পুরনো লিঙ্কটিই ব্যবহৃত হবে
+                print(f"Could not get confirmation token: {e}") # ডিবাগিং এর জন্য এরর প্রিন্ট করা ভালো
                 pass
 
         else:
             final_download_link = link_info['original_url']
-        # --- পরিবর্তন শেষ ---
 
         file_size = None
         try:
@@ -192,7 +194,7 @@ def download_page(link_id):
     except Exception as e:
         return f"An error occurred: {e}", 500
 
-# --- END OF MODIFIED FUNCTION ---
+# --- END OF FINAL WORKING FUNCTION ---
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get('PORT', 10000)))
