@@ -130,6 +130,8 @@ def manage_ads():
 
 # --- Public Download Page --- 
 
+# --- START OF SIMPLIFIED app.py FUNCTION ---
+
 @app.route("/download/<link_id>")
 def download_page(link_id):
     try:
@@ -140,39 +142,10 @@ def download_page(link_id):
         
         ads = settings_collection.find_one() or {}
         
+        # আমরা এখন শুধু একটি সাধারণ ডাউনলোড লিঙ্ক তৈরি করব
+        # বাকি কাজ ফ্রন্টএন্ডের জাভাস্ক্রিপ্ট করবে
         if link_info.get("is_gdrive"):
-            file_id = link_info['file_id']
-            initial_url = f"https://drive.google.com/uc?export=download&id={file_id}"
-            
-            final_download_link = initial_url # ডিফল্ট লিঙ্ক
-            
-            try:
-                # --- নতুন পরিবর্তন এখানে ---
-                # একটি সাধারণ ব্রাউজারের User-Agent হেডার যোগ করা হয়েছে
-                headers = {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-                }
-                
-                # রিকোয়েস্ট পাঠানোর সময় হেডারটি ব্যবহার করা
-                session = requests.Session()
-                response = session.get(initial_url, stream=True, headers=headers)
-                
-                token = None
-                for key, value in response.cookies.items():
-                    if key.startswith('download_warning'):
-                        token = value
-                        break
-
-                if token:
-                    # টোকেন ব্যবহার করে চূড়ান্ত ডাউনলোড লিঙ্ক তৈরি করা
-                    final_download_link = f"https://drive.google.com/uc?export=download&confirm={token}&id={file_id}"
-                # --- পরিবর্তন শেষ ---
-
-            except requests.RequestException as e:
-                # যদি কোনো নেটওয়ার্ক সমস্যা হয়, তাহলে পুরনো লিঙ্কটিই ব্যবহৃত হবে
-                print(f"Could not get confirmation token: {e}") # ডিবাগিং এর জন্য এরর প্রিন্ট করা ভালো
-                pass
-
+            final_download_link = f"https://drive.google.com/uc?export=download&id={link_info['file_id']}"
         else:
             final_download_link = link_info['original_url']
 
@@ -182,6 +155,7 @@ def download_page(link_id):
                 service = build('drive', 'v3', developerKey=GOOGLE_API_KEY)
                 file_size = int(service.files().get(fileId=link_info['file_id'], fields='size').execute().get('size', 0))
             else:
+                # অপ্রয়োজনীয় হেড রিকোয়েস্ট এড়ানোর জন্য এই অংশ বাদ দেওয়া যেতে পারে যদি পারফর্মেন্স ইস্যু হয়
                 with requests.head(link_info['original_url'], allow_redirects=True, timeout=5) as h:
                     if h.status_code == 200 and 'content-length' in h.headers:
                         file_size = int(h.headers['content-length'])
@@ -194,7 +168,9 @@ def download_page(link_id):
     except Exception as e:
         return f"An error occurred: {e}", 500
 
-# --- END OF FINAL WORKING FUNCTION ---
+# --- END OF SIMPLIFIED app.py FUNCTION ---
+
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get('PORT', 10000)))
