@@ -1,4 +1,4 @@
-<!-- START OF FILE server/templates/file.html -->
+<!-- START OF FINAL AND COMPLETE file.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -101,7 +101,6 @@
             margin-top: auto;
         }
 
-        /* 🔹 স্পিনার ডিজাইন */
         .spinner {
             border: 3px solid rgba(255, 255, 255, 0.3);
             border-top: 3px solid #fff;
@@ -122,36 +121,33 @@
 <body>
 
     <div class="content-wrapper">
-
-        <!-- ### BOX 1: File Info and Countdown Timer ### -->
         <div class="info-box">
             <h3>{{ link_info.filename }}</h3>
             <p><strong>Size:</strong> {{ format_size(link_info.size) }}</p>
-            
             <div id="timer-container">
                 <p>Your download link will be ready in:</p>
                 <div id="timer-countdown">5</div>
             </div>
         </div>
-
-        <!-- ### BOX 2: All Advertisements Together ### -->
         <div class="ads-wrapper">
             <div class="ad-slot" id="header-ad-slot">{{ ads.header_ad|safe }}</div>
             <div class="ad-slot" id="details-ad-slot">{{ ads.details_ad|safe }}</div>
             <div class="ad-slot" id="footer-ad-slot">{{ ads.footer_ad|safe }}</div>
         </div>
-
-        <!-- ### BOX 3: Download Button (Initially Hidden) ### -->
         <div id="download-wrapper" class="download-wrapper">
-            <button class="action-btn" onclick="openInNewTab('{{ final_download_link }}')">
+            <!-- পরিবর্তন ১: onclick ইভেন্টে একটি নতুন ফাংশন 'startDownload' কল করা হয়েছে -->
+            <button class="action-btn" onclick="startDownload('{{ final_download_link }}')">
                 ⬇️ Download Now
             </button>
         </div>
-        
     </div>
 
-    <footer>© 2025 PMWBD - All Rights Reserved</footer>
+    <!-- পরিবর্তন ২: কুকি সেট করার জন্য একটি অদৃশ্য iframe যুক্ত করা হয়েছে -->
+    <iframe id="downloader" style="display:none;"></iframe>
 
+    <footer>© {{ current_year }} PMWBD - All Rights Reserved</footer>
+
+    <!-- পরিবর্তন ৩: জাভাস্ক্রিপ্ট কোডটি সম্পূর্ণ নতুন করে লেখা হয়েছে -->
     <script>
         window.onload = function() {
             let timer = 5;
@@ -170,54 +166,40 @@
             }, 1000);
         };
 
-        function openInNewTab(url) {
+        // নতুন এবং কার্যকরী ডাউনলোড ফাংশন
+        function startDownload(url) {
             const button = document.querySelector(".action-btn");
-
-            // 🔹 বাটনে স্পিনার দেখাও
             button.disabled = true;
-            button.innerHTML = '<span class="spinner"></span> Processing...';
+            button.innerHTML = '<span class="spinner"></span> Preparing...';
 
-            // 🔹 ড্রাইভ লিংক হলে নতুন ট্যাবে ওপেন করো
+            // শুধুমাত্র গুগল ড্রাইভ লিঙ্কের জন্য বিশেষ কৌশল প্রয়োগ করা হবে
             if (url.includes("drive.google.com")) {
-                const newTab = window.open('about:blank', '_blank');
-                if (newTab) {
-                    newTab.location.href = url;
-                } else {
-                    alert('Please allow popups for this site to open your download link.');
-                }
+                // ধাপ ১: অদৃশ্য iframe ব্যবহার করে ব্যবহারকারীর ব্রাউজারে কুকি সেট করানো
+                const iframe = document.getElementById('downloader');
+                iframe.src = url;
 
-                // প্রসেসিং শেষ হলে বাটন টেক্সট ফিরিয়ে দাও
+                // ধাপ ২: এক সেকেন্ড পর মূল ডাউনলোড লিঙ্কটি নতুন ট্যাবে খোলা
+                // এই সময়ের মধ্যে কুকি সেট হয়ে যাবে, ফলে সতর্কীকরণ পেজ আসবে না
+                setTimeout(() => {
+                    // নতুন ট্যাবে লিঙ্কটি খোলা হচ্ছে
+                    window.open(url, '_blank');
+                    
+                    // বাটনটিকে আবার আগের অবস্থায় ফিরিয়ে আনা
+                    button.disabled = false;
+                    button.innerHTML = "⬇️ Download Now";
+                }, 1000); // ১ সেকেন্ড বিলম্বই যথেষ্ট
+
+            } else {
+                // অন্যান্য সাধারণ লিঙ্কের জন্য সরাসরি নতুন ট্যাবে খোলা হবে
+                window.open(url, '_blank');
                 setTimeout(() => {
                     button.disabled = false;
                     button.innerHTML = "⬇️ Download Now";
-                }, 5000);
-                return;
+                }, 1000);
             }
-
-            // 🔹 ড্রাইভ নয় এমন লিংক: ইন-পেজেই ডাউনলোড শুরু করো
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = '';
-            document.body.appendChild(link);
-
-            try {
-                link.click(); // একই ট্যাবে কাজ শুরু করার চেষ্টা
-            } catch (e) {
-                // যদি না পারে, নতুন ট্যাবে ওপেন করো
-                const fallback = window.open('about:blank', '_blank');
-                if (fallback) fallback.location.href = url;
-                else alert('Please allow popups for this site to open your download link.');
-            }
-
-            // কিছু সময় পরে বাটন পুনরায় আগের অবস্থায় ফেরাও
-            setTimeout(() => {
-                button.disabled = false;
-                button.innerHTML = "⬇️ Download Now";
-                link.remove();
-            }, 5000);
         }
     </script>
 
 </body>
 </html>
-<!-- END OF FILE server/templates/file.html -->
+<!-- END OF FINAL AND COMPLETE file.html -->
